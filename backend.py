@@ -1296,5 +1296,8 @@ if __name__ == "__main__":
     OUTPUTS.mkdir(exist_ok=True)
     LOGS.mkdir(exist_ok=True)
     warm_up()
-    print("Froja Image Studio: http://127.0.0.1:3000")
-    ThreadingHTTPServer(("127.0.0.1", 3000), FrojaHandler).serve_forever()
+    froja_port = int(os.environ.get("FROJA_PORT", "3000"))
+    if not 1 <= froja_port <= 65535:
+        raise ValueError("FROJA_PORT must be between 1 and 65535.")
+    print(f"Froja Image Studio: http://127.0.0.1:{froja_port}")
+    ThreadingHTTPServer(("127.0.0.1", froja_port), FrojaHandler).serve_forever()
