@@ -1,6 +1,6 @@
 {
   "name": "froja-image-studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A modern local-first image studio for ComfyUI, Ollama, and user-owned model libraries.",
   "license": "MIT",
   "author": "debattistacliff-commits",
