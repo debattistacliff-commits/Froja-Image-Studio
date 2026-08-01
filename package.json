@@ -27,7 +27,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "start": "G:\\ComfyUI_NEW\\.venv\\Scripts\\python.exe backend.py",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs && python -m unittest discover -s tests -p backend_workflows_test.py",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs && node scripts/run-python-tests.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
