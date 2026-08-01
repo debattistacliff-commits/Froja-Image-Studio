@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest an improvement or integration
+title: "[Idea]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Creative need
+      description: What problem would this solve for artists or users?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed experience
+      description: Describe how it should work in Froja.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Optional models, nodes, or references
+      description: Link to legal public documentation; do not attach weights.

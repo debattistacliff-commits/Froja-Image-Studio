@@ -1,0 +1,10 @@
+{
+  "id": "image-tools",
+  "name": "Froja Image Tools",
+  "version": "1.0.0",
+  "type": "image-workflows",
+  "enabled": true,
+  "local": true,
+  "engine": "comfyui-extension:9001",
+  "capabilities": ["image-to-image", "inpainting", "controlnet-canny", "controlnet-depth", "controlnet-pose"]
+}

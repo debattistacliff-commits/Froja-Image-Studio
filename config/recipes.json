@@ -1,0 +1,17 @@
+{
+  "z-image-turbo-q4": {
+    "label": "Z-Image Turbo Q4",
+    "architecture": "z-image-turbo",
+    "checkpoint": "z_image-Q4_K_M (1).gguf",
+    "components": [
+      "qwen3_4b_fp8_scaled.safetensors",
+      "ae.safetensors"
+    ],
+    "sampler": "Euler",
+    "scheduler": "Beta",
+    "steps": 9,
+    "cfg": 1,
+    "guidance": 9,
+    "recommended_resolution": [1024, 1024]
+  }
+}

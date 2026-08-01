@@ -1,0 +1,10 @@
+{
+  "id": "ollama-prompt",
+  "name": "Ollama Prompt Assistant",
+  "version": "1.0.0",
+  "type": "prompt-assistant",
+  "enabled": true,
+  "local": true,
+  "default_model": "qwen3.5:4b",
+  "capabilities": ["create-prompt", "enhance-prompt"]
+}

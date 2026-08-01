@@ -1,0 +1,10 @@
+{
+  "id": "face-studio",
+  "name": "Froja Face Studio",
+  "version": "1.0.0",
+  "type": "image-tool",
+  "enabled": true,
+  "local": true,
+  "engine": "comfyui-extension:9001",
+  "capabilities": ["face-detection", "face-swap", "face-restoration"]
+}

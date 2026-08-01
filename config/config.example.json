@@ -1,0 +1,16 @@
+{
+  "comfy_root": "C:/AI/ComfyUI",
+  "comfy_url": "http://127.0.0.1:9000",
+  "extension_comfy_url": "http://127.0.0.1:9001",
+  "joyai_root": "C:/AI/ComfyUI_JoyAI",
+  "joyai_url": "http://127.0.0.1:9002",
+  "ollama_url": "http://127.0.0.1:11434",
+  "extra_model_paths_config": "C:/AI/ComfyUI/extra_model_paths.yaml",
+  "model_roots": {
+    "checkpoints": ["C:/AI/ComfyUI/models/checkpoints"],
+    "loras": ["C:/AI/ComfyUI/models/loras"],
+    "vae": ["C:/AI/ComfyUI/models/vae"],
+    "embeddings": ["C:/AI/ComfyUI/models/embeddings"]
+  },
+  "diffusion_models_root": "C:/AI/ComfyUI/models/diffusion_models"
+}

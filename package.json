@@ -1,0 +1,51 @@
+{
+  "name": "froja-image-studio",
+  "version": "0.1.0",
+  "description": "A modern local-first image studio for ComfyUI, Ollama, and user-owned model libraries.",
+  "license": "MIT",
+  "author": "debattistacliff-commits",
+  "homepage": "https://github.com/debattistacliff-commits/Froja-Image-Studio#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/debattistacliff-commits/Froja-Image-Studio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/debattistacliff-commits/Froja-Image-Studio/issues"
+  },
+  "keywords": [
+    "comfyui",
+    "image-generation",
+    "ollama",
+    "lora",
+    "stable-diffusion",
+    "local-ai"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "start": "G:\\ComfyUI_NEW\\.venv\\Scripts\\python.exe backend.py",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs && python -m unittest discover -s tests -p backend_workflows_test.py",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "eslint": "9.39.4",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.8.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.65.0",
+    "vite": "^8.2.0"
+  },
+  "type": "module"
+}
