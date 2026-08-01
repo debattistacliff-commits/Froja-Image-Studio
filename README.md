@@ -70,6 +70,15 @@ cd Froja-Image-Studio
 
 ## Quick start — Linux
 
+On Ubuntu or Debian, install the system prerequisites first:
+
+```bash
+sudo apt update
+sudo apt install python3 python3-venv python3-pip curl
+```
+
+Install Node.js 22 or newer using the instructions for your distribution, then run:
+
 ```bash
 git clone https://github.com/debattistacliff-commits/Froja-Image-Studio.git
 cd Froja-Image-Studio
