@@ -28,5 +28,10 @@ foreach ($folder in "checkpoints", "loras", "vae", "embeddings", "diffusion_mode
 $windowsZip = Join-Path $release "Froja-Image-Studio-Windows.zip"
 if (Test-Path $windowsZip) { Remove-Item -LiteralPath $windowsZip }
 Compress-Archive -Path $stage -DestinationPath $windowsZip -CompressionLevel Optimal
+
+$linuxArchive = Join-Path $release "Froja-Image-Studio-Linux.tar.gz"
+if (Test-Path $linuxArchive) { Remove-Item -LiteralPath $linuxArchive }
+tar -czf $linuxArchive -C $release "Froja-Image-Studio"
+
 Write-Host "Created $windowsZip"
-Write-Host "Linux packages are built automatically by .github/workflows/release.yml."
+Write-Host "Created $linuxArchive"
