@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 
 const candidates = process.platform === "win32"
-  ? [["python", []], ["py", ["-3"]]]
-  : [["python3", []], ["python", []]];
+  ? [[".venv\\Scripts\\python.exe", []], ["python", []], ["py", ["-3"]]]
+  : [[".venv/bin/python", []], ["python3", []], ["python", []]];
 
 for (const [command, prefix] of candidates) {
   const check = spawnSync(command, [...prefix, "--version"], { stdio: "ignore" });
