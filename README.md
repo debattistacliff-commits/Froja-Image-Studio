@@ -1,7 +1,7 @@
 # Froja Image Studio
 
 <p align="center">
-  <img src="public/froja-mark.png" width="128" alt="Froja Image Studio emblem" />
+  <img src="public/froja-brand-banner.png" width="100%" alt="Froja Image Studio" />
 </p>
 
 <p align="center">
@@ -14,7 +14,6 @@
 
 > **Project status:** active work in progress. The main generation workflow is usable today; advanced editing workflows are experimental and depend on the ComfyUI nodes and models installed on the user's machine.
 
-![Froja Image Studio interface](docs/images/froja-studio.png)
 
 ## Why Froja?
 
@@ -37,6 +36,10 @@ Froja brings common generative-image tasks into one clean interface while leavin
 - Repair tools for faces, hands, bodies, and selected regions.
 - JoyAI natural-language image editing integration.
 - Local History and Favorites with generation metadata and zoom.
+- Froja Training Studio for controlled eight-view LoRA datasets.
+- Appearance Library with realistic materials, body, hair, hands, landscape, and fabric references.
+- Prompt Cards and reusable custom wildcards for repeatable training combinations.
+- Full-quality training image inspection with zoom and approval controls.
 - Built-in bronze, teal, and cosmic themes, custom backgrounds, font scaling, and multiple interface languages.
 - Coordinated VRAM handoff between isolated ComfyUI engines.
 

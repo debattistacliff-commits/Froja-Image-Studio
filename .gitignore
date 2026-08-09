@@ -62,3 +62,7 @@ yarn-error.log*
 
 # Local release packages
 release/
+
+# User-supplied local material references
+materials/library/*
+!materials/library/README.txt

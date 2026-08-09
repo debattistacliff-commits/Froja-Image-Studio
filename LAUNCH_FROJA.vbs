@@ -9,5 +9,5 @@ launcher = fso.BuildPath(studioFolder, "START_FROJA.bat")
 
 ' Run Froja in a visible terminal so generation progress and errors remain
 ' available while the studio is open.
-command = "cmd.exe /d /c """ & launcher & """"
+command = "cmd.exe /d /k call """ & launcher & """"
 shell.Run command, 1, False

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import { appearanceCategories, appearanceLibrary } from "./appearance-library";
 
 type Model = {
   name: string;
@@ -16,8 +17,12 @@ type Model = {
 };
 type LoraChoice = Model & { strength: number };
 type GenerationRecord = { id:string; image:string; created:string; favorite:boolean; prompt:string; negative:string; model:string; style:string; seed:number; width:number; height:number; steps:number; cfg:number; sampler:string };
+type DatasetItem = { id:string; image:string; name:string; caption:string; state:string; metadata?:string };
+type TrainingTask = { name:string; position:string; environment:string };
+type TrainingResult = { id:string; image:string; name:string; position:string; environment:string; prompt:string; approved:boolean };
+type MaterialReference = { name:string; prompt:string; source:string; relative:string; preview:string };
 
-type IconName = "plus" | "home" | "create" | "library" | "preset" | "workflow" | "model" | "lora" | "embedding" | "image" | "enhance" | "inpaint" | "face" | "control" | "light" | "repair" | "wand" | "settings" | "palette";
+type IconName = "plus" | "home" | "create" | "library" | "preset" | "workflow" | "model" | "lora" | "embedding" | "image" | "video" | "enhance" | "inpaint" | "face" | "control" | "light" | "repair" | "wand" | "settings" | "palette";
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, string[]> = {
     plus:["M12 5v14","M5 12h14"], home:["m3 11 9-8 9 8","M5 10v10h14V10","M9 20v-6h6v6"],
@@ -25,6 +30,7 @@ function Icon({ name }: { name: IconName }) {
     preset:["M4 7h10","M18 7h2","M4 17h2","M10 17h10","M14 4v6","M6 14v6"], workflow:["M5 5h5v5H5z","M14 14h5v5h-5z","M10 7h4a3 3 0 0 1 3 3v4","m14 11 3 3 3-3"],
     model:["m12 3 9 5-9 5-9-5 9-5Z","m3 12 9 5 9-5","m3 16 9 5 9-5"], lora:["M8 3v6a4 4 0 0 0 8 0V3","M6 3h4","M14 3h4","M12 13v8","M8 21h8"],
     embedding:["M6 3h12v18H6z","M9 7h6","M9 11h6","M9 15h4"], image:["M3 5h18v14H3z","m3 11 4-4 4 4 3-3 5 5","M15 9h.01"],
+    video:["M3 5h13v14H3z","m16 5 4 3v8l-4 3V5Z","m8 9 4 3-4 3V9Z"],
     enhance:["m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3Z","m18 14 .8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14Z"],
     inpaint:["M4 16 15 5l4 4L8 20H4v-4Z","m13-9 2-2 4 4-2 2"], face:["M12 22a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z","M9 10h.01","M15 10h.01","M8.5 15c2 2 5 2 7 0"],
     control:["M12 3v18","M3 12h18","M7 7h10v10H7z"], light:["M9 18h6","M10 22h4","M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4Z"],
@@ -80,6 +86,21 @@ function previewUrl(model?: Model) {
   return model?.preview ? `/api/preview?path=${model.preview}` : "";
 }
 
+const trainingShotOptions: Record<string, string[][]> = {
+  Character: [["Front","full-body front view, neutral standing pose"],["Three-quarter","three-quarter full-body view, natural confident pose"],["Profile","clean side profile, full body visible"],["Back","rear view, looking slightly over shoulder"],["Action","dynamic physically plausible action pose"],["Seated","natural seated pose, hands visible"],["Portrait","head-and-shoulders close portrait"],["Environment","wide environmental portrait, complete figure visible"]],
+  Object: [["Front","front product view"],["Three-quarter","three-quarter product view"],["Side","strict side view"],["Back","rear product view"],["Top","top-down view"],["Detail","macro detail view of materials and construction"],["In Use","object shown naturally in use"],["Environment","wide contextual scene containing the object"]],
+  Landscape: [["Wide","wide establishing landscape"],["Ground","eye-level ground view"],["Aerial","high aerial view"],["Low Angle","low viewpoint with foreground depth"],["Morning","same landscape at soft morning light"],["Golden Hour","same landscape at warm golden-hour light"],["Storm","same landscape in dramatic weather"],["Detail","close environmental detail from the same location"]],
+  Style: [["Portrait","portrait composition demonstrating the style"],["Full Body","full-body subject demonstrating the style"],["Architecture","architectural scene demonstrating the style"],["Landscape","natural landscape demonstrating the style"],["Interior","detailed interior demonstrating the style"],["Object","single-object study demonstrating the style"],["Action","dynamic action composition demonstrating the style"],["Lighting","dramatic lighting study demonstrating the style"]],
+};
+const promptCardLibrary: Record<string,{label:string;options:{name:string;prompt:string}[]}> = {
+  Subject:{label:"Subject",options:[{name:"Warrior",prompt:"formidable heroic warrior with coherent equipment and identity"},{name:"Furniture",prompt:"professionally designed furniture with realistic construction"},{name:"Architecture",prompt:"coherent architectural subject with structurally believable details"},{name:"Creature",prompt:"distinct fantasy creature with consistent anatomy and markings"},{name:"Portrait",prompt:"single identifiable portrait subject with stable facial identity"}]},
+  Material:{label:"Material",options:[{name:"Aged Bronze",prompt:"aged bronze with natural verdigris and worn polished edges"},{name:"Black Steel",prompt:"dark forged steel with subtle wear and realistic reflections"},{name:"Mahogany",prompt:"polished mahogany with deep warm natural grain"},{name:"Marble",prompt:"white marble with subtle grey mineral veining"},{name:"Leather",prompt:"weathered leather with natural creases and stitching"}]},
+  Pose:{label:"Pose",options:[{name:"Neutral",prompt:"balanced neutral presentation pose"},{name:"Defensive",prompt:"controlled defensive stance with believable weight"},{name:"Action",prompt:"dynamic action pose with correct anatomy and physical balance"},{name:"Seated",prompt:"natural seated pose with clear silhouette"},{name:"In Use",prompt:"shown naturally in practical use"}]},
+  Environment:{label:"Environment",options:[{name:"Studio",prompt:"clean professional studio presentation"},{name:"Castle",prompt:"historic stone castle interior with atmospheric depth"},{name:"Battlefield",prompt:"dramatic battlefield environment with layered depth"},{name:"Forest",prompt:"natural forest environment with realistic vegetation"},{name:"Frozen",prompt:"frozen wasteland with blowing snow and cold atmosphere"}]},
+  Lighting:{label:"Lighting",options:[{name:"Cinematic",prompt:"cinematic directional lighting with controlled contrast"},{name:"Golden Hour",prompt:"warm golden-hour light with long soft shadows"},{name:"Moonlight",prompt:"cool moonlight with subtle rim lighting"},{name:"Torchlight",prompt:"warm flickering torchlight with realistic falloff"},{name:"Product",prompt:"soft professional product lighting revealing material detail"}]},
+  Camera:{label:"Camera",options:[{name:"Full View",prompt:"complete subject visible in frame"},{name:"Low Angle",prompt:"slight low-angle camera with a powerful perspective"},{name:"Close Detail",prompt:"macro close detail with shallow depth of field"},{name:"Three-quarter",prompt:"three-quarter camera view showing depth and construction"},{name:"Wide",prompt:"wide contextual composition with foreground-to-background depth"}]}
+};
+const datasetPoseOptions = [["Front","full-body front view, neutral pose, complete subject visible"],["Three-quarter","three-quarter view, natural balanced pose"],["Profile","clean side profile, full subject visible"],["Back","rear view, design and silhouette clearly visible"],["Action","dynamic but anatomically correct action pose"],["Seated","natural seated pose with hands visible"],["Portrait","head-and-shoulders portrait with consistent identity"],["Environment","wide environmental view with complete subject visible"]] as const;
 const artStyleOptions = [
   [
     "Photoreal",
@@ -362,6 +383,22 @@ export default function Home() {
     null,
   );
 
+  const [datasetOpen,setDatasetOpen]=useState(false); const [datasetItems,setDatasetItems]=useState<DatasetItem[]>([]); const [datasetTrigger,setDatasetTrigger]=useState(""); const [datasetSize,setDatasetSize]=useState(768); const [datasetCrop,setDatasetCrop]=useState(true); const [datasetState,setDatasetState]=useState("Ready"); const [datasetBasePrompt,setDatasetBasePrompt]=useState(""); const [datasetVariation,setDatasetVariation]=useState("Front"); const [datasetJob,setDatasetJob]=useState(""); const [datasetJobState,setDatasetJobState]=useState("Ready"); const [datasetPendingPrompt,setDatasetPendingPrompt]=useState("");
+  const [trainingInspectId,setTrainingInspectId]=useState(""); const [trainingInspectZoom,setTrainingInspectZoom]=useState(1);
+  const [trainingStudioOpen,setTrainingStudioOpen]=useState(false); const [trainingSessionLoaded,setTrainingSessionLoaded]=useState(false); const [trainingSession,setTrainingSession]=useState("Froja_Training_001"); const [trainingType,setTrainingType]=useState("Character"); const [trainingConcept,setTrainingConcept]=useState(""); const [trainingShots,setTrainingShots]=useState<string[]>(trainingShotOptions.Character.map(item=>item[0])); const [trainingEnvironments,setTrainingEnvironments]=useState<string[]>(["Studio"]); const [trainingImagesPerSetup,setTrainingImagesPerSetup]=useState(1); const [trainingQueue,setTrainingQueue]=useState<TrainingTask[]>([]); const [trainingJob,setTrainingJob]=useState(""); const [trainingPending,setTrainingPending]=useState({name:"",position:"",environment:"",prompt:""}); const [trainingResults,setTrainingResults]=useState<TrainingResult[]>([]); const [trainingState,setTrainingState]=useState("Ready"); const [trainingGalleryGroup,setTrainingGalleryGroup]=useState("Setup");
+  const [materialReferences,setMaterialReferences]=useState<MaterialReference[]>([]); const [materialFolder,setMaterialFolder]=useState(""); const [materialLibraryState,setMaterialLibraryState]=useState("Ready");
+  const [promptCardsOpen,setPromptCardsOpen]=useState(false); const [promptCardSelections,setPromptCardSelections]=useState<Record<string,string>>({}); const [promptCardConsistency,setPromptCardConsistency]=useState(true); const [customPromptCard,setCustomPromptCard]=useState(""); const [customPromptCards,setCustomPromptCards]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem("froja-custom-prompt-cards")||"[]")}catch{return[]}});
+  useEffect(()=>{localStorage.setItem("froja-custom-prompt-cards",JSON.stringify(customPromptCards));},[customPromptCards]);
+  const randomizePromptCards=()=>{const next:Record<string,string>={};Object.entries(promptCardLibrary).forEach(([category,group])=>{next[category]=group.options[Math.floor(Math.random()*group.options.length)].name;});setPromptCardSelections(next);};
+  const addCustomPromptCard=()=>{const value=customPromptCard.trim();if(!value)return;setCustomPromptCards(items=>items.includes(value)?items:[...items,value]);setPromptCardSelections(items=>({...items,Custom:value}));setCustomPromptCard("");};
+  const trainingInspectIndex=trainingResults.findIndex(item=>item.id===trainingInspectId); const trainingInspectItem=trainingInspectIndex>=0?trainingResults[trainingInspectIndex]:undefined;
+  const stepTrainingInspection=(direction:number)=>{if(!trainingResults.length)return;const next=(Math.max(0,trainingInspectIndex)+direction+trainingResults.length)%trainingResults.length;setTrainingInspectId(trainingResults[next].id);setTrainingInspectZoom(1);};
+  useEffect(()=>{if(!trainingInspectId)return;const handler=(event:KeyboardEvent)=>{if(event.key==="Escape")setTrainingInspectId("");if(event.key==="ArrowLeft")stepTrainingInspection(-1);if(event.key==="ArrowRight")stepTrainingInspection(1);};window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);},[trainingInspectId,trainingInspectIndex,trainingResults]);
+  const [appearanceOpen,setAppearanceOpen]=useState(true); const [appearanceCategory,setAppearanceCategory]=useState("Materials"); const [appearanceSearch,setAppearanceSearch]=useState(""); const [appearanceSelections,setAppearanceSelections]=useState<Record<string,string>>({}); const [appearanceColor,setAppearanceColor]=useState("#3c8f8b"); const [appearanceHarmony,setAppearanceHarmony]=useState("Cool Analogous"); const [appearanceRoughness,setAppearanceRoughness]=useState(62); const [appearanceWeathering,setAppearanceWeathering]=useState(38); const [appearanceConsistency,setAppearanceConsistency]=useState(true); const [appearanceTarget,setAppearanceTarget]=useState("Main object / subject");
+
+  const loadMaterialLibrary=async()=>{setMaterialLibraryState("Scanning…");try{const response=await fetch("/api/materials");const result=await response.json();if(!response.ok)throw new Error(result.error||"Material scan failed.");setMaterialReferences(Array.isArray(result.items)?result.items:[]);setMaterialFolder(result.folder||"");setMaterialLibraryState(`${result.items?.length||0} local material${result.items?.length===1?"":"s"} found`);}catch(caught){setMaterialLibraryState(caught instanceof Error?caught.message:"Material scan failed.");}};
+  useEffect(()=>{loadMaterialLibrary();},[]);
+  const currentAppearancePresets=useMemo(()=>appearanceCategory==="Materials"?[...appearanceLibrary.Materials.presets,...materialReferences.map(item=>({name:item.name,prompt:item.prompt,preview:`url("${item.preview}") center/cover no-repeat`}))]:appearanceLibrary[appearanceCategory].presets,[appearanceCategory,materialReferences]);
   useEffect(() => {
     const load = async () => {
       try {
@@ -582,28 +619,48 @@ export default function Home() {
 
   const visibleModels = useMemo(
     () =>
-      models
+      [...models]
         .filter((m) => m.name.toLowerCase().includes(modelQuery.toLowerCase()))
-        .slice(0, 100),
+        .sort((a, b) => {
+          const aVerified = ["Flux2-Klein", "Mage-Flow", "Krea-2"].includes(a.architecture) && a.size < 10 * 1024 ** 3;
+          const bVerified = ["Flux2-Klein", "Mage-Flow", "Krea-2"].includes(b.architecture) && b.size < 10 * 1024 ** 3;
+          return Number(bVerified) - Number(aVerified) || a.name.localeCompare(b.name);
+        })
+        .slice(0, 500),
     [models, modelQuery],
+  );
+  const verifiedCompactModels = useMemo(
+    () => models
+      .filter((m) => ["Flux2-Klein", "Mage-Flow", "Krea-2"].includes(m.architecture) && m.size < 10 * 1024 ** 3)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [models],
   );
   const visibleLoras = useMemo(
     () =>
-      loras
+      [...loras]
         .filter((m) =>
           `${m.name} ${(m.triggers || []).join(" ")}`
             .toLowerCase()
             .includes(loraQuery.toLowerCase()),
         )
-        .slice(0, 100),
-    [loras, loraQuery],
+        .sort((a, b) =>
+          Number(selectedLoras.some((item) => item.path === b.path)) - Number(selectedLoras.some((item) => item.path === a.path)) ||
+          Number(Boolean(b.preview)) - Number(Boolean(a.preview)) ||
+          a.name.localeCompare(b.name),
+        )
+        .slice(0, 1000),
+    [loras, loraQuery, selectedLoras],
   );
   const current = models.find((m) => m.relative === checkpoint);
   const currentCamera = cameraProfiles.find((camera) => camera.id === cameraProfile) || cameraProfiles[0];
   const needsSpecialWorkflow =
-    !!current && ["Flux", "Qwen", "ACE Audio"].includes(current.architecture);
+    !!current && ["Qwen", "ACE Audio", "Flux2-Large"].includes(current.architecture);
   const isZImage = current?.architecture === "Z-Image";
   const isKrea2 = current?.architecture === "Krea-2";
+  const isFlux2Klein = current?.architecture === "Flux2-Klein";
+  const isMageFlow = current?.architecture === "Mage-Flow";
+  const isFlux = current?.architecture === "Flux" || isFlux2Klein;
+  const isDarkBeast = isKrea2 && /darkbeast/i.test(current?.name || "");
 
   useEffect(() => {
     if (!isKrea2) return;
@@ -611,8 +668,11 @@ export default function Home() {
       setSteps(8);
       setCfg(1);
       setSampler("er_sde");
-      setWidth((value) => Math.max(value, 1024));
-      setHeight((value) => Math.max(value, 1024));
+      // Keep the compact Krea GGUF workflow safe on 12 GB GPUs.  Users can
+      // still choose 1024px manually, but selecting the model must not force
+      // an unnecessary jump in VRAM use.
+      setWidth((value) => Math.max(value, 512));
+      setHeight((value) => Math.max(value, 512));
     }, 0);
     return () => window.clearTimeout(timer);
   }, [isKrea2]);
@@ -626,6 +686,30 @@ export default function Home() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [isZImage]);
+
+  useEffect(() => {
+    if (!isFlux) return;
+    const timer = window.setTimeout(() => {
+      setSteps(isFlux2Klein ? 4 : 8);
+      setCfg(1);
+      setSampler("euler");
+      setWidth((value) => isFlux2Klein ? 512 : Math.max(value, 768));
+      setHeight((value) => isFlux2Klein ? 512 : Math.max(value, 768));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isFlux, isFlux2Klein]);
+
+  useEffect(() => {
+    if (!isMageFlow) return;
+    const timer = window.setTimeout(() => {
+      setSteps(4);
+      setCfg(1);
+      setSampler("euler");
+      setWidth(512);
+      setHeight(512);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isMageFlow]);
 
   function toggleLora(lora: Model) {
     const chosen = selectedLoras.some((item) => item.path === lora.path);
@@ -746,6 +830,142 @@ export default function Home() {
     setImagePromptOpen(false);
   }
 
+  async function imageUrlToDataUrl(source: string) {
+    if (source.startsWith("data:image/")) return source;
+    const blob = await fetch(source).then((response) => { if (!response.ok) throw new Error("Image could not be read."); return response.blob(); });
+    return await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(blob); });
+  }
+  async function addCurrentToDataset() {
+    try {
+      const source = await imageUrlToDataUrl(image);
+      setDatasetItems((items) => [...items, { id:crypto.randomUUID(), image:source, name:`froja-${items.length + 1}.png`, caption:prompt.trim(), state:"Caption ready" }]);
+      setDatasetOpen(true); setDatasetState("Current Froja image added. Review its caption before export.");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not add the current image."); }
+  }
+  function addDatasetFiles(files?: FileList | null) {
+    [...(files || [])].slice(0, Math.max(0, 200 - datasetItems.length)).forEach((file) => {
+      if (!file.type.startsWith("image/") || file.size > 25 * 1024 * 1024) return;
+      const reader = new FileReader(); reader.onload = () => setDatasetItems((items) => [...items, { id:crypto.randomUUID(), image:String(reader.result), name:file.name, caption:"", state:"Needs caption" }]); reader.readAsDataURL(file);
+    });
+    setDatasetState("Images added. Captions remain under your control.");
+  }
+  async function inspectDatasetItem(id: string) {
+    const item = datasetItems.find((entry) => entry.id === id); if (!item) return;
+    setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, state:"Reading embedded data…"} : entry));
+    try {
+      const response = await fetch("/api/image-metadata", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({image:item.image})});
+      const result = await response.json(); if (!response.ok) throw new Error(result.error || "Metadata check failed.");
+      if (!result.found) {
+        setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, state:"No embedded generation data — use Create Caption Locally", metadata:"No prompt or settings were stored inside this file."} : entry)); return;
+      }
+      const details = [result.source, result.model && `Model: ${result.model}`, result.seed && `Seed: ${result.seed}`, result.steps && `Steps: ${result.steps}`, result.cfg && `CFG: ${result.cfg}`, result.sampler && `Sampler: ${result.sampler}`, `${result.width} × ${result.height}`, result.negative && `Negative: ${result.negative}`].filter(Boolean).join(" · ");
+      setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, caption:result.prompt || entry.caption, state:"Original generation data recovered", metadata:details} : entry));
+      if (result.prompt && !datasetBasePrompt) setDatasetBasePrompt(result.prompt);
+    } catch (caught) { setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, state:caught instanceof Error ? caught.message : "Metadata check failed"} : entry)); }
+  }
+  useEffect(() => {
+    if (!trainingStudioOpen || trainingSessionLoaded) return;
+    fetch("/api/training-session").then(response=>response.json()).then(saved=>{
+      if(saved.session)setTrainingSession(saved.session);
+      if(saved.concept)setTrainingConcept(saved.concept);
+      if(saved.type&&trainingShotOptions[saved.type])setTrainingType(saved.type);
+      if(Array.isArray(saved.results))setTrainingResults(saved.results);
+      setTrainingSessionLoaded(true);
+    }).catch(()=>setTrainingSessionLoaded(true));
+  },[trainingStudioOpen,trainingSessionLoaded]);
+
+  useEffect(() => {
+    if(!trainingSessionLoaded)return;
+    const timer=window.setTimeout(()=>fetch("/api/training-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({session:trainingSession,concept:trainingConcept,type:trainingType,results:trainingResults})}).catch(()=>undefined),500);
+    return()=>window.clearTimeout(timer);
+  },[trainingSessionLoaded,trainingSession,trainingConcept,trainingType,trainingResults]);
+  function startTrainingSet() {
+    if (!trainingConcept.trim()) { setTrainingState("Describe the subject, landscape, object, or style first."); return; }
+    if (!checkpoint) { setTrainingState("Choose a working Froja checkpoint first."); return; }
+    if (!trainingShots.length) { setTrainingState("Select at least one variation."); return; }
+    if (!trainingEnvironments.length) { setTrainingState("Select at least one environment."); return; }
+    const tasks: TrainingTask[] = [];
+    for (const position of trainingShots) for (const environment of trainingEnvironments) for (let copy=1; copy<=trainingImagesPerSetup; copy++) tasks.push({name:`${position} · ${environment} · ${copy}`,position,environment});
+    if (tasks.length > 24) { setTrainingState(`This plan contains ${tasks.length} images. Reduce it to 24 or fewer for safe review and GPU use.`); return; }
+    setTrainingResults([]); setTrainingQueue(tasks); setTrainingState(`Preparing ${tasks.length} controlled variations…`);
+  }
+
+  useEffect(() => {
+    if (trainingJob || !trainingQueue.length) return;
+    const task=trainingQueue[0]; const name=task.name; const guide=trainingShotOptions[trainingType].find(([item])=>item===task.position)?.[1] || task.position;
+    const appearancePrompt=Object.entries(appearanceSelections).map(([category,value])=>{ const preset=appearanceLibrary[category]?.presets.find(item=>item.name===value)||(category==="Materials"?materialReferences.find(item=>item.name===value):undefined); return preset?`${appearanceTarget.toLowerCase()}: ${preset.prompt}`:`${category.toLowerCase()}: ${value}`; }).join(", "); const cardEntries=promptCardConsistency?Object.entries(promptCardSelections):Object.entries(promptCardSelections).map(([category])=>{const options=promptCardLibrary[category]?.options||[];return [category,options.length?options[Math.floor(Math.random()*options.length)].name:promptCardSelections[category]];}); const wildcardPrompt=cardEntries.map(([category,value])=>promptCardLibrary[category]?.options.find(item=>item.name===value)?.prompt||value).filter(Boolean).join(", "); const composed=`${trainingConcept.trim()}, ${guide}, ${task.environment.toLowerCase()} environment${appearancePrompt?`, ${appearancePrompt}`:""}${wildcardPrompt?`, prompt cards: ${wildcardPrompt}`:""}, ${appearanceHarmony.toLowerCase()} color harmony led by ${appearanceColor}, surface roughness ${appearanceRoughness} percent, weathering ${appearanceWeathering} percent, ${appearanceConsistency?"strictly preserve these appearance choices across all eight views":"allow controlled appearance variation"}, preserve the exact same core subject or location design, consistent materials, shapes, colors and artistic language, distinct composition from the other dataset images, high detail, clean LoRA training reference`;
+    setTrainingPending({name,position:task.position,environment:task.environment,prompt:composed}); setTrainingState(`Queueing ${name} (${trainingResults.length+1} of ${trainingResults.length+trainingQueue.length})…`);
+    fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({checkpoint,architecture:current?.architecture,prompt:composed,negative_prompt:[negative,"duplicate composition, repeated camera angle, inconsistent identity, changed design, low detail, blur, watermark, text, malformed anatomy"].filter(Boolean).join(", "),steps,cfg,seed:Math.floor(Math.random()*4294967295),width,height,sampler,scheduler:"normal",loras:selectedLoras.map((l)=>({name:l.relative,strength:l.strength}))})})
+      .then(async response=>{const result=await response.json();if(!response.ok)throw new Error(result.error||"Generation failed.");setTrainingJob(result.prompt_id);setTrainingState(`Generating ${name}…`);})
+      .catch(caught=>{setTrainingQueue([]);setTrainingState(caught instanceof Error?caught.message:"Generation failed.");});
+  },[trainingQueue,trainingJob,trainingType,trainingConcept,trainingResults.length,checkpoint,current?.architecture,negative,steps,cfg,width,height,sampler,selectedLoras,appearanceSelections,appearanceColor,appearanceHarmony,appearanceRoughness,appearanceWeathering,appearanceConsistency,appearanceTarget,promptCardSelections,promptCardConsistency]);
+
+  useEffect(() => {
+    if(!trainingJob)return;
+    const timer=window.setInterval(async()=>{
+      try{
+        const result=await fetch(`/api/jobs/${trainingJob}`).then(response=>response.json());
+        if(result.status==="complete"&&result.images?.[0]){
+          const source=await imageUrlToDataUrl(result.images[0]);
+          setTrainingResults(items=>[...items,{id:crypto.randomUUID(),image:source,name:trainingPending.name,position:trainingPending.position,environment:trainingPending.environment,prompt:trainingPending.prompt,approved:false}]);
+          setTrainingQueue(items=>items.slice(1));setTrainingJob("");setTrainingState(`${trainingPending.name} completed. Continuing the set…`);
+        }else if(result.status==="failed"||result.status==="error"){setTrainingQueue([]);setTrainingJob("");setTrainingState(result.error||`${trainingPending.name} failed.`);}
+      }catch{setTrainingQueue([]);setTrainingJob("");setTrainingState("Froja lost contact with the image engine.");}
+    },1500);return()=>window.clearInterval(timer);
+  },[trainingJob,trainingPending]);
+
+  function sendApprovedTrainingImages() {
+    const approved=trainingResults.filter(item=>item.approved);
+    if(!approved.length){setTrainingState("Approve at least one strong image first.");return;}
+    setDatasetItems(items=>[...items,...approved.map(item=>({id:crypto.randomUUID(),image:item.image,name:`training-${item.name.toLowerCase().replace(/[^a-z0-9]+/g,"-")}.png`,caption:item.prompt,state:"Approved in Training Set Studio"}))]);
+    setDatasetBasePrompt(trainingConcept);setTrainingState(`${approved.length} approved image${approved.length===1?"":"s"} sent to LoRA Dataset Studio.`);
+  }
+  async function generateDatasetVariation() {
+    const base = (datasetBasePrompt || datasetItems[0]?.caption || prompt).trim();
+    if (!base) { setDatasetState("Add an image with a recovered caption, or write a base subject/style prompt first."); return; }
+    if (!checkpoint) { setDatasetState("Choose a working Froja checkpoint first."); return; }
+    const pose = datasetPoseOptions.find(([name]) => name === datasetVariation)?.[1] || datasetPoseOptions[0][1];
+    const variationPrompt = `${base}, ${pose}, preserve the same character identity, clothing design, materials, color palette, artistic style and lighting language, clean LoRA training reference, anatomically correct hands and body`;
+    setDatasetJobState("Queueing"); setDatasetState(`Generating ${datasetVariation} variation…`); setDatasetPendingPrompt(variationPrompt);
+    try {
+      const response = await fetch("/api/generate", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({checkpoint, architecture:current?.architecture, prompt:variationPrompt, negative_prompt:[negative,"different character, changed costume, changed color palette, duplicate person, extra limbs, cropped body"].filter(Boolean).join(", "), steps, cfg, seed:Math.floor(Math.random()*4294967295), width, height, sampler, scheduler:"normal", loras:selectedLoras.map((l)=>({name:l.relative,strength:l.strength}))})});
+      const result=await response.json(); if(!response.ok) throw new Error(result.error || "Variation generation failed.");
+      setDatasetJob(result.prompt_id); setDatasetJobState("Running");
+    } catch(caught) { setDatasetJobState("Error"); setDatasetState(caught instanceof Error ? caught.message : "Variation generation failed."); }
+  }
+
+  useEffect(() => {
+    if (!datasetJob) return;
+    const timer=window.setInterval(async()=>{
+      try {
+        const result=await fetch(`/api/jobs/${datasetJob}`).then((response)=>response.json()); setDatasetJobState(result.status);
+        if(result.status==="complete" && result.images?.[0]){
+          const source=await imageUrlToDataUrl(result.images[0]);
+          setDatasetItems((items)=>[...items,{id:crypto.randomUUID(),image:source,name:`variation-${datasetVariation.toLowerCase().replace(/[^a-z0-9]+/g,"-")}.png`,caption:datasetPendingPrompt,state:"Generated variation · caption ready"}]);
+          setDatasetJob(""); setDatasetJobState("Complete"); setDatasetState(`${datasetVariation} generated and added to this dataset.`);
+        } else if(result.status==="failed" || result.status==="error") { setDatasetJob(""); setDatasetJobState("Error"); setDatasetState(result.error || "Variation generation failed."); }
+      } catch { setDatasetJob(""); setDatasetJobState("Error"); setDatasetState("Froja lost contact with the image engine while checking this variation."); }
+    },1500);
+    return()=>window.clearInterval(timer);
+  },[datasetJob,datasetPendingPrompt,datasetVariation]);
+  async function captionDatasetItem(id: string) {
+    const item = datasetItems.find((entry) => entry.id === id); if (!item) return;
+    setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, state:"Analyzing locally…"} : entry));
+    try {
+      const response = await fetch("/api/image-to-prompt", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({image:item.image, detail:"balanced", model:"llama3.2-vision:latest"}) });
+      const result = await response.json(); if (!response.ok) throw new Error(result.error || "Captioning failed.");
+      setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, caption:result.prompt, state:"Caption ready"} : entry));
+    } catch (caught) { setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, state:(caught instanceof Error && /refused|urlopen|10061/i.test(caught.message)) ? "Local visual captioning is offline — start Ollama, or use Read Original Prompt & Settings" : caught instanceof Error ? caught.message : "Captioning failed"} : entry)); }
+  }
+  async function exportDataset() {
+    if (!datasetItems.length) return; setDatasetState("Building safe dataset ZIP…");
+    try {
+      const response = await fetch("/api/dataset/export", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({items:datasetItems, trigger:datasetTrigger, size:datasetSize, crop:datasetCrop}) });
+      if (!response.ok) { const result=await response.json(); throw new Error(result.error || "Export failed."); }
+      const url=URL.createObjectURL(await response.blob()); const anchor=document.createElement("a"); anchor.href=url; anchor.download="froja-lora-dataset.zip"; anchor.click(); URL.revokeObjectURL(url);
+      setDatasetState(`Exported ${datasetItems.length} image/caption pair${datasetItems.length === 1 ? "" : "s"}. Originals were untouched.`);
+    } catch (caught) { setDatasetState(caught instanceof Error ? caught.message : "Export failed."); }
+  }
   async function runEnhancement() {
     if (!enhanceSource) {
       setError("Choose an image first.");
@@ -1104,6 +1324,13 @@ export default function Home() {
     setJobState("Running");
   }
 
+  function protectAnatomyAndPose() {
+    const poseGuide = "anatomically correct natural human anatomy, physically plausible pose, exactly two arms and two hands, five natural fingers on each hand, correct grip and joint alignment, coherent object geometry, no duplicated limbs or objects, sharp detailed face and eyes";
+    setPrompt((value) => value.toLowerCase().includes("physically plausible pose") ? value : [value.trim(), poseGuide].filter(Boolean).join(", "));
+    setNegative((value) => [value.trim(), "extra limbs, extra arms, extra hands, extra fingers, missing fingers, fused fingers, malformed hands, broken wrists, disconnected limbs, duplicated objects, impossible pose, deformed face, crossed eyes"].filter(Boolean).join(", "));
+    setMaintenanceState("Anatomy and complex-pose guidance added to the prompt.");
+  }
+
   async function openOutputFolder() {
     setOutputFolderState("Opening…");
     try {
@@ -1219,12 +1446,8 @@ export default function Home() {
   return (
     <main lang={uiLanguage} className={`studio theme-${uiTheme} font-${fontFamily} icons-${iconStyle} ${boldText ? "bold-text" : ""} ${customBackground ? "has-custom-background" : ""}`} style={{ "--font-scale": `${fontScale}%`, "--text-scale": textScale / 100, "--froja-bg-image": customBackground ? `url(${customBackground})` : "none" } as CSSProperties}>
       <aside className="leftbar">
-        <div className="logo">
-          <img src="/froja-mark.png" alt="Froja forge flame emblem" />
-          <div>
-            <b>FROJA</b>
-            <small>IMAGE STUDIO</small>
-          </div>
+        <div className="logo brand-banner">
+          <img src="/froja-brand-banner.png" alt="Froja Image Studio" />
         </div>
         <button className="new-btn" onClick={newGeneration}>
           <Icon name="plus" /> <span>{t("new")}</span><kbd>Ctrl N</kbd>
@@ -1246,11 +1469,11 @@ export default function Home() {
           <button onClick={() => openNavigation("workflows")}>
             <Icon name="workflow" /><span>{t("workflows")}</span>
           </button>
-          <button onClick={() => setModelOpen(true)}>
+          <button onClick={() => { setModelQuery(""); setModelOpen(true); }}>
             <Icon name="model" /><span>{t("models")}</span>
             <i>{counts.checkpoints}</i>
           </button>
-          <button onClick={() => setLoraOpen(true)}>
+          <button onClick={() => { setLoraQuery(""); setLoraOpen(true); }}>
             <Icon name="lora" /><span>{t("loras")}</span>
             <i>{counts.loras}</i>
           </button>
@@ -1264,7 +1487,11 @@ export default function Home() {
           <button className="image-prompt-nav" onClick={() => setImagePromptOpen(true)}>
             <Icon name="image" /><span>{t("imagePrompt")}</span>
           </button>
-          <button className="enhance-nav" onClick={() => setEnhanceOpen(true)}>
+          <button className="training-nav" onClick={() => setTrainingStudioOpen(true)}>
+            <Icon name="create" /><span>Froja Training Studio</span><i>{trainingResults.length || "New"}</i>
+          </button>          <button className="dataset-nav" onClick={() => setDatasetOpen(true)}>
+            <Icon name="lora" /><span>LoRA Dataset Studio</span><i>{datasetItems.length || "Add"}</i>
+          </button>          <button className="enhance-nav" onClick={() => setEnhanceOpen(true)}>
             <Icon name="enhance" /><span>{t("enhance")}</span>
           </button>
           <button onClick={() => openImageTool("img2img")}>
@@ -1404,7 +1631,7 @@ export default function Home() {
             </div>
           )}
           <div className="prompt-foot">
-            <button onClick={() => setLoraOpen(true)}>＋ Attach LoRA</button>
+            <button onClick={() => { setLoraQuery(""); setLoraOpen(true); }}>＋ Attach LoRA</button>
             <button onClick={() => setImagePromptOpen(true)}>
               ▧ Image to Prompt
             </button>
@@ -1423,6 +1650,9 @@ export default function Home() {
               {assisting === "create"
                 ? "Ollama is creating…"
                 : "♧ Prompt Helper"}
+            </button>
+            <button onClick={protectAnatomyAndPose} title="Add stronger instructions for hands, faces, bodies, poses and held objects">
+              Anatomy &amp; Pose
             </button>
             <span>
               {(tab === "negative" ? negative : prompt).length} / 2000
@@ -1480,7 +1710,7 @@ export default function Home() {
           <div className="settings-grid">
             <div className="model-block">
               <label>Checkpoint</label>
-              <button className="picker" onClick={() => setModelOpen(true)}>
+              <button className="picker" onClick={() => { setModelQuery(""); setModelOpen(true); }}>
                 {previewUrl(current) ? (
                   <img
                     className="model-thumb image"
@@ -1505,7 +1735,7 @@ export default function Home() {
               <label>LoRAs</label>
               <button
                 className="picker compact"
-                onClick={() => setLoraOpen(true)}
+                onClick={() => { setLoraQuery(""); setLoraOpen(true); }}
               >
                 <span>
                   <b>
@@ -1619,6 +1849,21 @@ export default function Home() {
             </div>
           </div>
           {error && <div className="error">{error}</div>}
+          {isDarkBeast && (
+            <div className="model-note">
+              DarkBeast uses the Krea-2 workflow. Its 24.5 GB BF16 checkpoint may exceed a 12 GB GPU; use Krea-2 Turbo Q4 if generation runs out of VRAM.
+            </div>
+          )}
+          {isMageFlow && (
+            <div className="model-note">
+              Mage-Flow Turbo INT8 is verified at 512 × 512 on this 12 GB GPU. It uses close to 11 GB VRAM, so keep 512px for dependable generation.
+            </div>
+          )}
+          {isFlux2Klein && (
+            <div className="model-note">
+              FLUX.2 Klein Q4 GGUF is the verified compact FLUX workflow for this GPU: 4 steps, CFG 1, and a safe 512px starting size.
+            </div>
+          )}
           <div className="generate-row">
             <button className="preset">
               Preset: {isZImage ? "Z-Image Turbo · 4 steps" : "My Default"}
@@ -1635,6 +1880,12 @@ export default function Home() {
                   : engine === "ready"
                     ? isZImage
                       ? "Generate Z-Image"
+                      : isMageFlow
+                        ? "Generate Mage-Flow"
+                        : isFlux2Klein
+                          ? "Generate FLUX.2 Klein"
+                          : isFlux
+                            ? "Generate Flux"
                       : "Generate"
                     : "Engine starting…"}
             </button>
@@ -2131,7 +2382,7 @@ export default function Home() {
           <div className="drawer navigation-drawer" onClick={(event) => event.stopPropagation()}>
             <header><div><h2>{navPanel[0].toUpperCase() + navPanel.slice(1)}</h2><p>Froja workspace and application controls.</p></div><button onClick={() => setNavPanel("")}>×</button></header>
             {navPanel === "home" && <div className="nav-workspace"><div className="nav-stats"><article><b>{counts.checkpoints}</b><small>Checkpoints</small></article><article><b>{counts.loras}</b><small>LoRAs</small></article><article><b>{counts.embeddings || 0}</b><small>Embeddings</small></article><article><b>{engine}</b><small>Image engine</small></article></div><h3>Quick start</h3><button onClick={() => setNavPanel("")}>Create a new image</button><button onClick={() => { setNavPanel(""); setImagePromptOpen(true); }}>Recognize an image and create a prompt</button><button onClick={() => { setNavPanel(""); setEnhanceOpen(true); }}>Enhance an existing image</button></div>}
-            {navPanel === "library" && <div className="nav-workspace"><p>Your files remain in their existing folders; Froja only indexes them.</p><button onClick={() => { setNavPanel(""); setModelOpen(true); }}>Checkpoints <b>{counts.checkpoints}</b></button><button onClick={() => { setNavPanel(""); setLoraOpen(true); }}>LoRA models <b>{counts.loras}</b></button><button onClick={() => setNavPanel("embeddings")}>Embeddings <b>{counts.embeddings || 0}</b></button><button onClick={refreshLibrary}>Refresh all linked folders</button></div>}
+            {navPanel === "library" && <div className="nav-workspace"><p>Your files remain in their existing folders; Froja only indexes them.</p><button onClick={() => { setNavPanel(""); setModelQuery(""); setModelOpen(true); }}>Checkpoints <b>{counts.checkpoints}</b></button><button onClick={() => { setNavPanel(""); setLoraQuery(""); setLoraOpen(true); }}>LoRA models <b>{counts.loras}</b></button><button onClick={() => setNavPanel("embeddings")}>Embeddings <b>{counts.embeddings || 0}</b></button><button onClick={refreshLibrary}>Refresh all linked folders</button></div>}
             {navPanel === "presets" && <div className="nav-workspace"><p>Save and restore your current prompt, model, style, sampler, dimensions, steps and CFG settings.</p><button onClick={saveCurrentPreset}>Save current settings as My Preset</button><button onClick={loadCurrentPreset}>Load My Preset</button><button onClick={() => { setSteps(28); setCfg(7); setWidth(768); setHeight(768); setSampler("euler"); setMaintenanceState("Balanced defaults applied."); }}>Apply balanced defaults</button></div>}
             {navPanel === "workflows" && <div className="workflow-grid"><button onClick={() => { setNavPanel(""); setImagePromptOpen(true); }}><b>Image → Prompt</b><small>Understand an image and produce a generation prompt.</small></button><button onClick={() => { setNavPanel(""); openImageTool("img2img"); }}><b>Image → Image</b><small>Recreate or transform an existing image.</small></button><button onClick={() => { setNavPanel(""); openImageTool("inpaint"); }}><b>Inpainting</b><small>Repair a selected area.</small></button><button onClick={() => { setNavPanel(""); setRelightOpen(true); }}><b>IC-Light Relight</b><small>Change the direction and character of light.</small></button><button onClick={() => { setNavPanel(""); setRepairOpen(true); }}><b>Repair Studio</b><small>Correct faces, eyes, hands and local defects.</small></button><button onClick={() => { setNavPanel(""); setJoyaiOpen(true); }}><b>Smart Edit</b><small>Edit an image using natural-language instructions.</small></button></div>}
             {navPanel === "embeddings" && <><input className="nav-search" placeholder="Search embeddings…" value={embeddingSearch} onChange={(event) => setEmbeddingSearch(event.target.value)} /><div className="embedding-list">{embeddings.filter((item) => item.name.toLowerCase().includes(embeddingSearch.toLowerCase())).map((item) => <article key={item.path}><div><b>{item.name}</b><small>{item.source} · {(item.size / 1024 / 1024).toFixed(1)} MB</small></div><button onClick={() => { setNegative((value) => [value, `embedding:${item.name.replace(/\.[^.]+$/, "")}`].filter(Boolean).join(", ")); setMaintenanceState(`${item.name} added to the negative prompt.`); }}>Add to negative prompt</button></article>)}</div></>}
@@ -2309,6 +2560,72 @@ export default function Home() {
         </div>
       )}
 
+      {trainingStudioOpen && (
+        <div className="modal training-modal" onClick={()=>setTrainingStudioOpen(false)}>
+          <div className="training-workspace with-appearance" onClick={event=>event.stopPropagation()}>
+            <header className="training-head"><div><h2>✦ Froja Training Studio</h2><p>Generate eight consistent images in different positions, angles and environments for professional LoRA training.</p></div><span><button onClick={()=>{setTrainingResults([]);setTrainingQueue([]);setTrainingShots(trainingShotOptions[trainingType].map(([name])=>name));setTrainingEnvironments(["Studio"]);setTrainingImagesPerSetup(1);setTrainingSession(`Froja_Training_${Date.now().toString().slice(-5)}`);setTrainingState("New eight-image session ready.");}}>＋ New Session</button><button className="appearance-toggle" onClick={()=>setAppearanceOpen(value=>!value)}>◉ Appearance Extension</button><button className="prompt-cards-toggle" onClick={()=>setPromptCardsOpen(value=>!value)}>▦ Prompt Cards</button><button onClick={()=>setTrainingStudioOpen(false)}>×</button></span></header>
+            <aside className="appearance-extension appearance-library">
+              <header><h3>Appearance Library</h3></header>
+
+              <nav className="appearance-tabs">{["Materials","Body","Hair","Hands","Landscapes","Fabric"].map(category=><button key={category} className={appearanceCategory===category?"selected":""} onClick={()=>setAppearanceCategory(category)}><i>{appearanceLibrary[category].icon}</i><span>{appearanceLibrary[category].label}</span></button>)}</nav>
+              {appearanceCategory==="Materials"&&<div className="material-library-tools"><span><b>My Material Folder</b><small>{materialLibraryState}</small></span><button onClick={async()=>{await fetch("/api/materials/open-folder",{method:"POST"});setMaterialLibraryState("Folder opened — add PNG, JPG or WebP files, then rescan.");}}>Open Folder</button><button onClick={loadMaterialLibrary}>Rescan</button>{materialFolder&&<em title={materialFolder}>{materialFolder}</em>}</div>}
+              <div className={`appearance-cards category-${appearanceCategory.toLowerCase()}`}>{currentAppearancePresets.filter(preset=>preset.name.toLowerCase().includes(appearanceSearch.toLowerCase())).map(preset=><button key={preset.name} className={appearanceSelections[appearanceCategory]===preset.name?"selected":""} onClick={()=>setAppearanceSelections(items=>{const next={...items};if(next[appearanceCategory]===preset.name)delete next[appearanceCategory];else next[appearanceCategory]=preset.name;return next;})}><i style={{background:preset.preview}}/><b>{preset.name}</b>{appearanceSelections[appearanceCategory]===preset.name&&<em>✓</em>}</button>)}</div>
+              {(()=>{const selected=currentAppearancePresets.find(preset=>preset.name===(appearanceSelections[appearanceCategory]||currentAppearancePresets[0]?.name))||currentAppearancePresets[0];return <>
+                <section className={`appearance-preview-grid category-${appearanceCategory.toLowerCase()}`}><div className="appearance-live"><b>Live Preview</b><small>{selected.name}</small><i className={`swatch-preview swatch-${appearanceCategory.toLowerCase()}-${currentAppearancePresets.indexOf(selected)+1}`} style={{background:selected.preview}}/></div><div className="appearance-harmony"><header><b>Colour Harmony</b><select value={appearanceHarmony} onChange={event=>setAppearanceHarmony(event.target.value)}><option>Cool Analogous</option><option>Analogous</option><option>Complementary</option><option>Triadic</option><option>Monochrome</option><option>Warm</option><option>Cool</option></select></header><div className="color-wheel"><input aria-label="Appearance colour" type="color" value={appearanceColor} onChange={event=>setAppearanceColor(event.target.value)}/></div><div className="palette-rows"><span>Primary<i style={{background:appearanceColor}}/><i/><i/></span><span>Secondary<i/><i/><i/></span><span>Accent<i/><i/><i/></span></div></div></section>
+                <section className="appearance-sliders">{appearanceLibrary[appearanceCategory].controls.map((control,index)=>{const value=index===0?appearanceRoughness:index===1?appearanceWeathering:Math.max(15,78-index*9);return <label key={control}>{control}<b>{(value/100).toFixed(2)}</b><input type="range" min="0" max="100" value={value} onChange={event=>{if(index===0)setAppearanceRoughness(+event.target.value);if(index===1)setAppearanceWeathering(+event.target.value);}}/></label>})}</section>
+                <label className="appearance-target"><span>Apply selection to</span><select value={appearanceTarget} onChange={event=>setAppearanceTarget(event.target.value)}><option>Main object / subject</option><option>Background / environment</option><option>Clothing / accessories</option><option>Complete image</option></select></label><section className="appearance-finish"><b>Style Finish</b><div><button className="selected">Natural</button><button>Balanced</button><button>Styled</button><button>Weathered</button></div></section>
+              </>})()}
+              <label className="appearance-lock"><span><b>Consistency Lock</b><small>Lock selected appearance across all eight outputs</small></span><input type="checkbox" checked={appearanceConsistency} onChange={event=>setAppearanceConsistency(event.target.checked)}/></label>
+              <button className="appearance-apply" onClick={()=>setTrainingState(`Appearance Library applied to all ${trainingShots.length*trainingEnvironments.length*trainingImagesPerSetup} planned images.`)}>Apply appearance to all 8</button>
+              <footer>{Object.entries(appearanceSelections).map(([category,value])=><span key={category}>{category}: {value}</span>)}</footer>
+            </aside>            {promptCardsOpen&&<aside className="prompt-cards-studio">
+              <header><div><h3>Prompt Cards & Wildcards Studio</h3><p>Build controlled combinations manually or create a randomized variation.</p></div><button onClick={()=>setPromptCardsOpen(false)}>×</button></header>
+              <div className="prompt-card-actions"><button onClick={randomizePromptCards}>✦ Randomize Combination</button><button onClick={()=>setPromptCardSelections({})}>Clear Cards</button></div>
+              <div className="prompt-card-groups">{Object.entries(promptCardLibrary).map(([category,group])=><section key={category}><h4>{group.label}</h4><div>{group.options.map(card=><button key={card.name} className={promptCardSelections[category]===card.name?"selected":""} onClick={()=>setPromptCardSelections(items=>{const next={...items};if(next[category]===card.name)delete next[category];else next[category]=card.name;return next;})}><b>{card.name}</b><small>{card.prompt}</small></button>)}</div></section>)}</div>
+              <section className="custom-prompt-cards"><h4>My Custom Cards</h4><p className="custom-card-help">Save a reusable prompt fragment. Adding it selects it immediately; click a saved card to turn it on or off.</p><div><input value={customPromptCard} onChange={event=>setCustomPromptCard(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();addCustomPromptCard();}}} placeholder="Example: aged brass corners, realistic worn edges"/><button disabled={!customPromptCard.trim()} onClick={addCustomPromptCard}>Add & Select</button></div><nav>{!customPromptCards.length&&<small>No custom cards saved yet.</small>}{customPromptCards.map(card=><button key={card} aria-pressed={promptCardSelections.Custom===card} className={promptCardSelections.Custom===card?"selected":""} onClick={()=>setPromptCardSelections(items=>{const next={...items};if(next.Custom===card)delete next.Custom;else next.Custom=card;return next;})}><b>{promptCardSelections.Custom===card?"✓ ":""}{card}</b><i title="Delete custom card" onClick={event=>{event.stopPropagation();setCustomPromptCards(items=>items.filter(item=>item!==card));setPromptCardSelections(items=>items.Custom===card?Object.fromEntries(Object.entries(items).filter(([key])=>key!=="Custom")):items);}}>×</i></button>)}</nav></section>
+              <label className="prompt-card-lock"><span><b>Consistency Lock</b><small>Use this card combination across all eight training images</small></span><input type="checkbox" checked={promptCardConsistency} onChange={event=>setPromptCardConsistency(event.target.checked)}/></label>
+              <div className="prompt-card-preview"><b>Combined wildcard prompt</b><p>{Object.entries(promptCardSelections).map(([category,value])=>promptCardLibrary[category]?.options.find(item=>item.name===value)?.prompt||value).join(", ")||"Choose cards or use Randomize Combination."}</p></div>
+              <button className="prompt-card-apply" disabled={!Object.keys(promptCardSelections).length} onClick={()=>{setTrainingState(Object.keys(promptCardSelections).length+" Prompt Card selection"+(Object.keys(promptCardSelections).length===1?"":"s")+" applied to "+(trainingShots.length*trainingEnvironments.length*trainingImagesPerSetup)+" planned images.");setPromptCardsOpen(false);}}>Apply Selected Cards to Training Set</button>
+            </aside>}            <div className="training-setup">
+              <label>What are you training?<div className="training-types">{Object.keys(trainingShotOptions).map(type=><button key={type} className={trainingType===type?"selected":""} onClick={()=>{setTrainingType(type);setTrainingShots(trainingShotOptions[type].map(([name])=>name));setTrainingEnvironments(["Studio"]);setTrainingImagesPerSetup(1);}}>{type}</button>)}</div></label>
+              <label>Core subject, place, object, or visual style<textarea value={trainingConcept} onChange={event=>setTrainingConcept(event.target.value)} placeholder="Describe exactly what must stay consistent across the complete training set…" /></label>
+              <div className="training-model"><span>Active checkpoint <b>{current?.name||"Not selected"}</b></span><span>Active LoRAs <b>{selectedLoras.length}</b></span><span>Output <b>{width} × {height}</b></span><span>Steps <b>{steps}</b></span></div>
+            </div>
+            <section className="training-shots"><header><div><h3>Eight-picture variation plan</h3><p>Select eight complementary views. Froja runs them one at a time for 12 GB GPU safety.</p></div><span><button onClick={()=>setTrainingShots(trainingShotOptions[trainingType].map(([name])=>name))}>Select all 8</button><button onClick={()=>setTrainingShots([])}>Clear</button></span></header><div>{trainingShotOptions[trainingType].map(([name,guide])=><button key={name} className={trainingShots.includes(name)?"selected":""} onClick={()=>setTrainingShots(items=>items.includes(name)?items.filter(item=>item!==name):[...items,name])}><i>{trainingShots.includes(name)?"✓":""}</i><b>{name}</b><small>{guide}</small></button>)}</div></section>
+            <section className="training-environment-panel"><div><b>Environments</b><div>{["Studio","Outdoor","Landscape","City","Sci-Fi","Fantasy","Indoor","Custom"].map(name=><button key={name} className={trainingEnvironments.includes(name)?"selected":""} onClick={()=>setTrainingEnvironments(items=>items.includes(name)?items.filter(item=>item!==name):[...items,name])}>{name}</button>)}</div></div><div><b>Output Settings</b><label>Images per setup<select value={trainingImagesPerSetup} onChange={event=>setTrainingImagesPerSetup(+event.target.value)}><option value={1}>1</option><option value={2}>2</option></select></label><label>Image size<select value={`${width}x${height}`} onChange={event=>{const [w,h]=event.target.value.split("x").map(Number);setWidth(w);setHeight(h);}}><option value="512x512">512 × 512</option><option value="768x768">768 × 768</option><option value="1024x1024">1024 × 1024</option><option value="768x1024">768 × 1024 Portrait</option><option value="1024x768">1024 × 768 Landscape</option></select></label></div></section>
+                        <section className="quality-guide"><b>Approve only strong training images</b><span>☑ Same identity/design</span><span>☑ Clear subject</span><span>☑ Different composition</span><span>☑ Correct anatomy/geometry</span><span>☑ No text or watermark</span><span>☑ No major artifacts</span></section>
+            <div className="training-selected-options"><small>Selected options</small>{Object.entries(appearanceSelections).map(([category,value])=><span key={category}>{category}: {value}</span>)}{Object.entries(promptCardSelections).map(([category,value])=><span key={"card-"+category}>Card · {category}: {value}</span>)}<span>Palette: {appearanceHarmony}</span></div><div className="training-run"><span><b>{trainingState}</b><small>{trainingResults.length} completed · {trainingQueue.length} remaining</small></span>{trainingQueue.length||trainingJob?<button onClick={()=>{setTrainingQueue([]);setTrainingState("Stopping after the current image.");}}>Stop after current</button>:<button className="primary" onClick={startTrainingSet}>Generate Selected Set</button>}</div>
+            <div className="training-gallery-tools"><b>Gallery</b><label>Group by<select value={trainingGalleryGroup} onChange={event=>setTrainingGalleryGroup(event.target.value)}><option>Setup</option><option>Position</option><option>Environment</option></select></label><button onClick={()=>setTrainingResults(items=>items.map(item=>({...item,approved:true})))}>Select All</button></div><div className="training-results">{!trainingResults.length&&<div className="training-empty"><Icon name="create"/><b>No variations generated yet</b><span>Select a plan and generate a controlled training set.</span></div>}{trainingResults.map(item=><article key={item.id} className={item.approved?"approved":""}><button className="training-image-inspect" title="Open image inspector" onClick={()=>{setTrainingInspectId(item.id);setTrainingInspectZoom(1);}}><img src={item.image} alt={`${item.name} training variation`}/><span>⌕ Inspect & Zoom</span></button><div><b>{item.name}</b><small>{item.approved?"Approved for dataset":"Review before approval"}</small><button onClick={()=>setTrainingResults(items=>items.map(result=>result.id===item.id?{...result,approved:!result.approved}:result))}>{item.approved?"Remove Approval":"Approve Image"}</button><button onClick={()=>setTrainingResults(items=>items.filter(result=>result.id!==item.id))}>Reject</button></div></article>)}</div>
+            <footer className="training-footer"><span><b>{trainingResults.filter(item=>item.approved).length}</b> approved of {trainingResults.length}</span><button onClick={sendApprovedTrainingImages} disabled={!trainingResults.some(item=>item.approved)}>Send Approved Images to LoRA Dataset Studio</button><button className="primary" disabled={!trainingResults.some(item=>item.approved)} onClick={()=>{sendApprovedTrainingImages();setTrainingStudioOpen(false);setDatasetOpen(true);}}>Open Dataset Studio</button></footer>
+          </div>
+        </div>
+      )}
+      {trainingInspectItem&&<div className="training-inspector-modal" onClick={()=>setTrainingInspectId("")}><section className="training-inspector" onClick={event=>event.stopPropagation()}><header><div><h2>{trainingInspectItem.name}</h2><p>{trainingInspectIndex+1} of {trainingResults.length} · {trainingInspectItem.position} · {trainingInspectItem.environment}</p></div><button aria-label="Close image inspector" onClick={()=>setTrainingInspectId("")}>×</button></header><div className="training-inspector-toolbar"><button onClick={()=>setTrainingInspectZoom(value=>Math.max(.25,value-.25))}>−</button><b>{Math.round(trainingInspectZoom*100)}%</b><button onClick={()=>setTrainingInspectZoom(value=>Math.min(4,value+.25))}>＋</button><button onClick={()=>setTrainingInspectZoom(1)}>Fit 100%</button><small>Mouse wheel zoom · scroll to examine details · arrow keys change image</small></div><div className="training-inspector-stage" onWheel={event=>{event.preventDefault();setTrainingInspectZoom(value=>Math.max(.25,Math.min(4,value+(event.deltaY<0?.15:-.15))))}}><img src={trainingInspectItem.image} alt={trainingInspectItem.name+" full quality inspection"} style={{width:(trainingInspectZoom*90)+"%",maxWidth:"none",maxHeight:"none"}}/></div><footer><button onClick={()=>stepTrainingInspection(-1)}>← Previous</button><div><b>{trainingInspectItem.approved?"Approved for dataset":"Awaiting quality review"}</b><p>{trainingInspectItem.prompt}</p></div><button onClick={()=>setTrainingResults(items=>items.map(item=>item.id===trainingInspectItem.id?{...item,approved:!item.approved}:item))}>{trainingInspectItem.approved?"Remove Approval":"Approve Image"}</button><button onClick={()=>stepTrainingInspection(1)}>Next →</button></footer></section></div>}
+      {datasetOpen && (
+        <div className="modal face-modal" onClick={() => setDatasetOpen(false)}>
+          <div className="drawer wide tool-drawer dataset-drawer" onClick={(event) => event.stopPropagation()}>
+            <header><div><h2>LoRA Dataset Studio</h2><p>Build a clean, captioned training set from your own images. Nothing is added automatically and originals stay untouched.</p></div><button onClick={() => setDatasetOpen(false)}>×</button></header>
+            <div className="dataset-toolbar">
+              <button className="primary" onClick={addCurrentToDataset}>Add Current Froja Image</button>
+              <label className="dataset-upload">Upload Images<input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(event) => addDatasetFiles(event.target.files)} /></label>
+              <label>Trigger word<input value={datasetTrigger} onChange={(event) => setDatasetTrigger(event.target.value)} placeholder="e.g. my_character" /></label>
+              <label>Output size<select value={datasetSize} onChange={(event) => setDatasetSize(+event.target.value)}><option value={0}>Original</option><option value={512}>512 × 512</option><option value={768}>768 × 768</option><option value={1024}>1024 × 1024</option></select></label>
+              <label className="dataset-check"><input type="checkbox" checked={datasetCrop} onChange={(event) => setDatasetCrop(event.target.checked)} /> Centre crop to square</label>
+            </div>
+            <section className="variation-studio">
+              <header><div><h3>Dataset Variation Studio</h3><p>Create deliberate pose and camera variations with the active Froja checkpoint and LoRAs. Each completed result is added here for your review—never exported automatically.</p></div><em>{datasetJobState}</em></header>
+              <label>Base subject and style<textarea value={datasetBasePrompt} onChange={(event)=>setDatasetBasePrompt(event.target.value)} placeholder="Recovered prompt appears here, or describe the character and style that must remain consistent…" /></label>
+              <div className="pose-grid">{datasetPoseOptions.map(([name,guide])=><button key={name} className={datasetVariation===name?"selected":""} onClick={()=>setDatasetVariation(name)}><b>{name}</b><small>{guide}</small></button>)}</div>
+              <div className="variation-actions"><span>Uses active model: <b>{current?.name || "Choose a checkpoint"}</b> · {selectedLoras.length} LoRA selected</span><button className="primary" disabled={!!datasetJob || !checkpoint} onClick={generateDatasetVariation}>{datasetJob ? `Generating: ${datasetJobState}…` : `Generate ${datasetVariation}`}</button></div>
+            </section>            <div className="dataset-list">
+              {!datasetItems.length && <div className="dataset-empty"><Icon name="image" /><b>No training images yet</b><span>Add the current result or choose your own images. Froja only processes them when you ask.</span></div>}
+              {datasetItems.map((item, index) => <article key={item.id}><img src={item.image} alt={item.name} /><div><b>{String(index + 1).padStart(3,"0")} · {item.name}</b><small>{item.state}</small>{item.metadata && <em className="dataset-metadata">{item.metadata}</em>}<textarea value={item.caption} onChange={(event) => setDatasetItems((items) => items.map((entry) => entry.id === item.id ? {...entry, caption:event.target.value} : entry))} placeholder="Describe this image for LoRA training…" /><span><button onClick={() => inspectDatasetItem(item.id)}>Read Original Prompt & Settings</button><button onClick={() => captionDatasetItem(item.id)}>Create Caption Visually</button><button onClick={() => setDatasetItems((items) => items.filter((entry) => entry.id !== item.id))}>Remove</button></span></div></article>)}
+            </div>
+            <footer className="dataset-footer"><span><b>{datasetItems.length}</b> image/caption pairs · ZIP includes dataset.json</span><button className="primary" disabled={!datasetItems.length} onClick={exportDataset}>Export LoRA Dataset ZIP</button></footer>
+            <div className="dataset-state">{datasetState}</div>
+          </div>
+        </div>
+      )}
       {repairOpen && (
         <div className="modal face-modal" onClick={() => setRepairOpen(false)}>
           <div
@@ -2459,6 +2776,21 @@ export default function Home() {
               value={modelQuery}
               onChange={(e) => setModelQuery(e.target.value)}
             />
+            {verifiedCompactModels.length > 0 && (
+              <div className="verified-models">
+                <div>
+                  <b>Ready for this 12 GB GPU</b>
+                  <small>ComfyUI diffusion models available through Froja</small>
+                </div>
+                {verifiedCompactModels.map((m) => (
+                  <button key={m.path} onClick={() => { setCheckpoint(m.relative); setModelOpen(false); }}>
+                    <span>{m.architecture}</span>
+                    <b>{m.name.replace(/\.(safetensors|ckpt|gguf)$/i, "")}</b>
+                    <small>{sizeLabel(m.size)}</small>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="library-grid">
               {visibleModels.map((m) => (
                 <button
@@ -2483,6 +2815,9 @@ export default function Home() {
                   <small>
                     {m.architecture} · {m.source}
                   </small>
+                  {["Flux2-Klein", "Mage-Flow", "Krea-2"].includes(m.architecture) && m.size < 10 * 1024 ** 3 && (
+                    <span className="compact-model-badge">Verified for this 12 GB GPU</span>
+                  )}
                   <em>{sizeLabel(m.size)}</em>
                 </button>
               ))}

@@ -36,6 +36,52 @@
 .drawer p { font-size: 12px; }
 .library-list b, .library-grid b { font-size: 12px; }
 .library-list small, .library-grid small, .trigger-line { font-size: 10px; }
+
+.compact-model-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 6px;
+  border: 1px solid #2b8f78;
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #8ce8d2;
+  background: #10372f;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.verified-models {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #20c9bd) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent, #20c9bd) 8%, #071015);
+}
+.verified-models > div,
+.verified-models > button {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+}
+.verified-models > button {
+  padding: 8px 10px;
+  border: 1px solid #294149;
+  border-radius: 9px;
+  background: #101c22;
+  color: inherit;
+  text-align: left;
+}
+.verified-models > button:hover { border-color: var(--accent, #20c9bd); }
+.verified-models span { color: var(--accent, #55ded2); font-size: 10px; }
+.verified-models b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.verified-models small { color: #91a4aa; }
+@media (max-width: 1000px) { .verified-models { grid-template-columns: 1fr 1fr; } }
 .selected-loras b { font-size: 12px; }
 .prompt-attachments > div b { font-size: 11px; }
 .prompt-attachments > div { min-height: 40px; }

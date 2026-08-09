@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import base64
+import io
 import mimetypes
 import os
 import random
@@ -14,6 +15,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import zipfile
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
@@ -22,6 +24,7 @@ ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
 OUTPUTS = ROOT / "outputs"
 LOGS = ROOT / "logs"
+TRAINING_SESSION_FILE = ROOT / "data" / "training-session.json"
 
 
 def load_local_config() -> dict:
@@ -52,6 +55,7 @@ def url_port(url: str, fallback: int) -> str:
 
 
 LOCAL_CONFIG = load_local_config()
+MATERIAL_LIBRARY = configured_path(LOCAL_CONFIG.get("material_library"), ROOT / "materials" / "library")
 COMFY_ROOT = configured_path(os.environ.get("FROJA_COMFY_ROOT") or LOCAL_CONFIG.get("comfy_root"), ROOT / "ComfyUI")
 COMFY_PYTHON = venv_python(COMFY_ROOT)
 COMFY_URL = os.environ.get("FROJA_COMFY_URL") or LOCAL_CONFIG.get("comfy_url", "http://127.0.0.1:9000")
@@ -72,7 +76,10 @@ DEFAULT_MODEL_ROOTS = {
 }
 configured_roots = LOCAL_CONFIG.get("model_roots", {})
 MODEL_ROOTS = {
-    kind: [configured_path(value, ROOT / "models" / kind) for value in configured_roots.get(kind, [])] or defaults
+    # Always scan the active ComfyUI folders first.  Configured libraries are
+    # additive rather than replacing them, so duplicate filenames resolve to
+    # the model used by the running ComfyUI engine.
+    kind: [*defaults, *[configured_path(value, ROOT / "models" / kind) for value in configured_roots.get(kind, [])]]
     for kind, defaults in DEFAULT_MODEL_ROOTS.items()
 }
 SPECIAL_DIFFUSION_ROOT = configured_path(
@@ -91,6 +98,92 @@ def read_json_body(handler: SimpleHTTPRequestHandler) -> dict:
     length = int(handler.headers.get("Content-Length", "0"))
     return json.loads(handler.rfile.read(length) or b"{}")
 
+
+def build_dataset_zip(payload: dict) -> bytes:
+    """Build a LoRA-ready archive in memory; source images are never modified."""
+    items = payload.get("items") or []
+    if not isinstance(items, list) or not 1 <= len(items) <= 200:
+        raise ValueError("Choose between 1 and 200 dataset images.")
+    size = int(payload.get("size") or 0)
+    if size not in {0, 512, 768, 1024}:
+        raise ValueError("Dataset size must be original, 512, 768, or 1024 pixels.")
+    crop = bool(payload.get("crop", True))
+    trigger = re.sub(r"\s+", " ", str(payload.get("trigger", "")).strip())
+    archive = io.BytesIO()
+    manifest = {"format": "froja-lora-dataset-v1", "trigger": trigger, "size": size or "original", "crop": crop, "items": []}
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+        for index, item in enumerate(items, 1):
+            data_url = str(item.get("image", ""))
+            match = re.match(r"^data:image/(?:png|jpeg|jpg|webp);base64,(.+)$", data_url, re.I | re.S)
+            if not match:
+                raise ValueError(f"Image {index} is not a supported local image.")
+            raw = base64.b64decode(match.group(1), validate=True)
+            if len(raw) > 25 * 1024 * 1024:
+                raise ValueError(f"Image {index} exceeds the 25 MB safety limit.")
+            with Image.open(io.BytesIO(raw)) as opened:
+                processed = ImageOps.exif_transpose(opened).convert("RGB")
+                if size:
+                    processed = ImageOps.fit(processed, (size, size), Image.Resampling.LANCZOS) if crop else processed.copy()
+                    if not crop: processed.thumbnail((size, size), Image.Resampling.LANCZOS)
+                output = io.BytesIO(); processed.save(output, "PNG", optimize=True); width, height = processed.size
+            stem = f"{index:05d}"
+            caption = re.sub(r"\s+", " ", str(item.get("caption", "")).strip())
+            text = ", ".join(part for part in (trigger, caption) if part)
+            bundle.writestr(f"images/{stem}.png", output.getvalue()); bundle.writestr(f"images/{stem}.txt", text + "\n")
+            manifest["items"].append({"image": f"images/{stem}.png", "caption": f"images/{stem}.txt", "width": width, "height": height})
+        bundle.writestr("dataset.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        bundle.writestr("README.txt", "Froja LoRA dataset\nEach PNG has a matching UTF-8 TXT caption. Original source images were not changed.\n")
+    return archive.getvalue()
+
+def scan_material_library() -> dict:
+    MATERIAL_LIBRARY.mkdir(parents=True, exist_ok=True)
+    items = []
+    for path in sorted(MATERIAL_LIBRARY.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+            continue
+        relative = path.relative_to(MATERIAL_LIBRARY).as_posix()
+        metadata = {}
+        sidecar = path.with_suffix(".json")
+        if sidecar.is_file():
+            try:
+                metadata = json.loads(sidecar.read_text(encoding="utf-8"))
+            except Exception:
+                metadata = {}
+        name = str(metadata.get("name") or path.stem.replace("_", " ").replace("-", " ").title())
+        prompt = str(metadata.get("prompt") or f"realistic {name.lower()} material, preserve its colour, texture, surface finish and weathering")
+        items.append({"name": name, "prompt": prompt, "source": str(metadata.get("source") or "Local material library"), "relative": relative, "preview": "/api/material-image?path=" + urllib.parse.quote(relative)})
+    return {"folder": str(MATERIAL_LIBRARY), "items": items}
+
+
+def open_material_library() -> dict:
+    MATERIAL_LIBRARY.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        subprocess.Popen(["explorer.exe", str(MATERIAL_LIBRARY)], close_fds=True)
+    elif shutil.which("xdg-open"):
+        subprocess.Popen(["xdg-open", str(MATERIAL_LIBRARY)], close_fds=True)
+    return {"ok": True, "folder": str(MATERIAL_LIBRARY)}
+
+def load_training_session() -> dict:
+    try:
+        return json.loads(TRAINING_SESSION_FILE.read_text(encoding="utf-8")) if TRAINING_SESSION_FILE.is_file() else {"session": "", "results": []}
+    except Exception:
+        return {"session": "", "results": []}
+
+
+def save_training_session(payload: dict) -> dict:
+    results = payload.get("results") or []
+    if not isinstance(results, list) or len(results) > 24:
+        raise ValueError("Training sessions support up to 24 reviewed images.")
+    clean = []
+    for item in results:
+        image = str(item.get("image", ""))
+        if not (image.startswith("/api/comfy-image?") or image.startswith("data:image/")):
+            raise ValueError("Training session contains an unsupported image reference.")
+        clean.append({key: item.get(key, "") for key in ("id", "image", "name", "position", "environment", "prompt", "approved")})
+    record = {"session": str(payload.get("session", "My_Training_Set_001"))[:100], "concept": str(payload.get("concept", ""))[:4000], "type": str(payload.get("type", "Character"))[:30], "results": clean, "updated": time.time()}
+    TRAINING_SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TRAINING_SESSION_FILE.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True, "count": len(clean), "session": record["session"]}
 
 def open_generated_output(image_url: str) -> dict:
     """Open the fixed ComfyUI output tree and select the requested generated image when possible."""
@@ -132,9 +225,23 @@ def comfy_request(path: str, data: dict | None = None, timeout=10):
         data=encoded,
         headers={"Content-Type": "application/json"} if encoded else {},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read() or b"{}")
-
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            details = json.loads(raw or "{}")
+        except json.JSONDecodeError:
+            details = {}
+        messages = []
+        for node in details.get("node_errors", {}).values():
+            for error in node.get("errors", []):
+                message = str(error.get("details") or error.get("message") or "").strip()
+                if message and message not in messages:
+                    messages.append(message)
+        summary = "; ".join(messages) or details.get("error", {}).get("message") or raw.strip() or str(exc)
+        raise RuntimeError(f"ComfyUI rejected the workflow: {summary}") from exc
 
 def extension_comfy_request(path: str, data: dict | None = None, timeout=15):
     encoded = None if data is None else json.dumps(data).encode("utf-8")
@@ -156,6 +263,7 @@ def joyai_request(path: str, data: dict | None = None, timeout=30):
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read() or b"{}")
+
 
 
 def save_joyai_upload(data_url: str) -> str:
@@ -586,6 +694,66 @@ def assist_prompt(payload: dict) -> dict:
     return {"prompt": content, "model": model, "mode": mode}
 
 
+def read_image_metadata(payload: dict) -> dict:
+    """Recover embedded Stable Diffusion/ComfyUI generation data without inference."""
+    data_url = str(payload.get("image", ""))
+    if not data_url or "," not in data_url:
+        raise ValueError("Choose an image first.")
+    header, encoded = data_url.split(",", 1)
+    if not header.startswith("data:image/"):
+        raise ValueError("Choose a PNG, JPEG, or WebP image.")
+    raw = base64.b64decode(encoded, validate=True)
+    if len(raw) > 25 * 1024 * 1024:
+        raise ValueError("The image is larger than 25 MB.")
+    with Image.open(io.BytesIO(raw)) as opened:
+        info = {str(k): v for k, v in opened.info.items() if isinstance(v, (str, int, float))}
+        exif = opened.getexif()
+        for tag in (270, 37510):
+            value = exif.get(tag)
+            if isinstance(value, bytes): value = value.decode("utf-8", "ignore").lstrip("ASCII\x00\x00\x00")
+            if value: info.setdefault("description" if tag == 270 else "user_comment", str(value))
+        width, height = opened.size
+    result = {"found": False, "prompt": "", "negative": "", "model": "", "seed": "", "steps": "", "cfg": "", "sampler": "", "scheduler": "", "width": width, "height": height, "source": "none", "raw": ""}
+    parameters = str(info.get("parameters") or info.get("Parameters") or info.get("user_comment") or info.get("description") or "").strip()
+    if parameters:
+        result.update({"found": True, "source": "Stable Diffusion parameters", "raw": parameters})
+        positive, negative, settings = parameters, "", ""
+        marker = "Negative prompt:"
+        if marker in positive:
+            positive, tail = positive.split(marker, 1)
+            match = re.search(r"\nSteps:\s*", tail)
+            if match: negative, settings = tail[:match.start()], tail[match.start()+1:]
+            else: negative = tail
+        else:
+            match = re.search(r"\nSteps:\s*", positive)
+            if match: positive, settings = positive[:match.start()], positive[match.start()+1:]
+        result["prompt"] = positive.strip(); result["negative"] = negative.strip()
+        pairs = dict((k.strip().lower(), v.strip()) for k, v in re.findall(r"(?:^|,)\s*([^:,]+):\s*([^,]+)", settings))
+        result.update({"steps": pairs.get("steps", ""), "sampler": pairs.get("sampler", ""), "scheduler": pairs.get("schedule type", ""), "cfg": pairs.get("cfg scale", ""), "seed": pairs.get("seed", ""), "model": pairs.get("model", "")})
+        size = pairs.get("size", "")
+        if re.match(r"^\d+x\d+$", size): result["width"], result["height"] = map(int, size.split("x"))
+        return result
+    prompt_json = info.get("prompt")
+    workflow_json = info.get("workflow")
+    if prompt_json or workflow_json:
+        result.update({"found": True, "source": "ComfyUI workflow", "raw": str(prompt_json or workflow_json)[:12000]})
+        try:
+            graph = json.loads(str(prompt_json or "{}"))
+            for node in graph.values() if isinstance(graph, dict) else []:
+                class_type = str(node.get("class_type", "")); inputs = node.get("inputs", {})
+                if class_type in {"CLIPTextEncode", "CLIPTextEncodeFlux", "TextEncodeQwenImageEdit"} and inputs.get("text"):
+                    text = str(inputs["text"])
+                    if not result["prompt"]: result["prompt"] = text
+                    elif not result["negative"]: result["negative"] = text
+                if "Sampler" in class_type:
+                    for source, target in (("seed","seed"),("steps","steps"),("cfg","cfg"),("sampler_name","sampler"),("scheduler","scheduler")):
+                        if source in inputs: result[target] = str(inputs[source])
+                if class_type == "CheckpointLoaderSimple": result["model"] = str(inputs.get("ckpt_name", ""))
+                if class_type in {"UNETLoader", "UnetLoaderGGUF"}: result["model"] = str(inputs.get("unet_name", ""))
+        except Exception: pass
+        return result
+    return result
+
 def image_to_prompt(payload: dict) -> dict:
     data_url = str(payload.get("image", ""))
     model = str(payload.get("model", "llama3.2-vision:latest"))
@@ -744,11 +912,63 @@ def start_comfy() -> bool:
 def find_preview(path: Path) -> str | None:
     base = path.with_suffix("")
     candidates = [Path(str(base) + ext) for ext in PREVIEW_EXTENSIONS]
+    # Forge/Civitai helpers also save galleries as model_0.png, model_1.jpg,
+    # etc. Use the first numbered image when no conventional sidecar exists.
+    for extension in (".png", ".jpg", ".jpeg", ".webp"):
+        candidates.append(Path(str(base) + "_0" + extension))
     for candidate in candidates:
         if candidate.exists():
             return urllib.parse.quote(str(candidate))
     return None
 
+
+def safetensor_is_adapter(path: Path) -> bool:
+    """Read only the safetensors header and identify LoRA/adapter files safely."""
+    if path.suffix.lower() != ".safetensors":
+        return False
+    try:
+        with path.open("rb") as stream:
+            length = int.from_bytes(stream.read(8), "little")
+            if length <= 0 or length > 32 * 1024 * 1024:
+                return False
+            header = json.loads(stream.read(length))
+        metadata = header.get("__metadata__", {}) if isinstance(header, dict) else {}
+        architecture_name = str(metadata.get("modelspec.architecture", "")).lower()
+        if "lora" in architecture_name or "adapter" in architecture_name or metadata.get("ss_network_module"):
+            return True
+        keys = [str(key).lower() for key in header if key != "__metadata__"]
+        sample = keys[:200]
+        return bool(sample) and sum("lora_" in key or ".lora" in key for key in sample) >= min(4, len(sample))
+    except Exception:
+        return False
+
+def safetensor_architecture(path: Path) -> str | None:
+    """Identify split diffusion models from tensor keys when filenames are ambiguous."""
+    if path.suffix.lower() != ".safetensors":
+        return None
+    try:
+        with path.open("rb") as stream:
+            length = int.from_bytes(stream.read(8), "little")
+            if length <= 0 or length > 32 * 1024 * 1024:
+                return None
+            header = json.loads(stream.read(length))
+        metadata = header.get("__metadata__", {}) if isinstance(header, dict) else {}
+        metadata_text = " ".join(str(value).lower() for value in metadata.values())
+        keys = [str(key).lower() for key in header if key != "__metadata__"]
+        sample = keys[:800]
+        if any(tag in metadata_text for tag in ("z image", "z-image", "z_image", "zimage")):
+            return "Z-Image"
+        if any("cap_embedder" in key for key in sample) and any("context_refiner" in key for key in sample):
+            return "Z-Image"
+        if "flux" in str(metadata.get("modelspec.architecture", "")).lower():
+            return "Flux"
+        if any(".double_blocks." in key and (".img_attn." in key or ".txt_attn." in key) for key in sample):
+            return "Flux"
+        if '"type": "unetloader"' in metadata_text and any("double_blocks" in key for key in sample):
+            return "Flux"
+    except Exception:
+        return None
+    return None
 
 def architecture(name: str) -> str:
     value = name.lower()
@@ -756,8 +976,18 @@ def architecture(name: str) -> str:
         return "ACE Audio"
     if "zimage" in value or "z_image" in value or "z-image" in value:
         return "Z-Image"
-    if "krea2" in value or "krea-2" in value or "krea_2" in value:
+    # DarkBeast is a Krea-2 derivative, but many published files omit
+    # "krea" from their filename.  Treat it as Krea-2 so it receives the
+    # required Qwen3-VL encoder and Qwen Image VAE rather than an SDXL graph.
+    if "krea2" in value or "krea-2" in value or "krea_2" in value or "darkbeast" in value:
         return "Krea-2"
+    if "mage_flow" in value or "mage-flow" in value:
+        return "Mage-Flow"
+    if any(tag in value for tag in ("flux-2-klein", "flux2-klein", "flux2klein")):
+        # On this 12 GB installation only the Q4 GGUF variant passed the safe
+        # loading criteria. Keep full safetensors, AIO and 9B files visible but
+        # disabled instead of risking another hard process termination.
+        return "Flux2-Klein" if value.endswith(".gguf") and "9b" not in value and "aio" not in value else "Flux2-Large"
     if "flux" in value:
         return "Flux"
     if "illustrious" in value or "pony" in value or "xl" in value:
@@ -807,52 +1037,74 @@ def scan_models(kind: str, force=False) -> list[dict]:
         if kind in model_cache and not force:
             return model_cache[kind]
     items = []
-    seen = set()
-    for root in MODEL_ROOTS.get(kind, []):
+    seen: dict[tuple[str, int], dict] = {}
+    roots = list(MODEL_ROOTS.get(kind, []))
+    if kind == "loras":
+        roots.extend(root for root in MODEL_ROOTS.get("checkpoints", []) if root not in roots)
+    checkpoint_roots = set(MODEL_ROOTS.get("checkpoints", []))
+    for root in roots:
         if not root.exists():
             continue
+        is_active_comfy_library = root == COMFY_ROOT / "models" / kind
         for path in root.rglob("*"):
             if not path.is_file() or path.suffix.lower() not in MODEL_EXTENSIONS:
                 continue
+            misplaced_adapter = root in checkpoint_roots and safetensor_is_adapter(path)
+            if kind == "checkpoints" and misplaced_adapter:
+                continue
+            if kind == "loras" and root in checkpoint_roots and not misplaced_adapter:
+                continue
             key = (path.name.lower(), path.stat().st_size)
             if key in seen:
+                # The active ComfyUI copy may not carry the Forge/Civitai
+                # sidecar. Preserve the active model path, but borrow the
+                # matching preview from another linked library.
+                if not seen[key].get("preview"):
+                    seen[key]["preview"] = find_preview(path)
                 continue
-            seen.add(key)
             relative = str(path.relative_to(root)).replace("/", "\\")
             item = {
                 "name": path.name,
                 "relative": relative,
                 "path": str(path),
-                "source": "External library" if COMFY_ROOT.resolve() not in path.resolve().parents else "ComfyUI",
+                # Do not use resolve() here: users may junction their active
+                # ComfyUI folder to a second drive, which would otherwise make
+                # an active model appear as an unrelated external library.
+                "source": "ComfyUI" if is_active_comfy_library else "External library",
                 "size": path.stat().st_size,
-                "architecture": architecture(path.name),
+                "architecture": "Z-Image LoRA" if kind == "loras" and (misplaced_adapter or "_FrojaLinked" in path.parts) else (safetensor_architecture(path) or architecture(path.name)),
                 "preview": find_preview(path),
             }
             if kind == "loras":
                 item.update(lora_metadata(path))
             items.append(item)
-    # Large split-model engines live outside checkpoints. Expose only supported
-    # Krea-2 diffusion weights here, without flooding the checkpoint picker with
-    # every UNET in the shared ComfyUI library.
+            seen[key] = item
+    # Split-model engines live outside checkpoints. Expose only the compact
+    # families for which Froja has a tested, native workflow, without flooding
+    # the checkpoint picker with unrelated video and utility UNETs.
     if kind == "checkpoints" and SPECIAL_DIFFUSION_ROOT.exists():
         for path in SPECIAL_DIFFUSION_ROOT.rglob("*"):
             if not path.is_file() or path.suffix.lower() not in MODEL_EXTENSIONS:
                 continue
-            if architecture(path.name) != "Krea-2":
+            architecture_name = architecture(path.name)
+            if architecture_name not in {"Krea-2", "Flux2-Klein", "Mage-Flow"}:
                 continue
             key = (path.name.lower(), path.stat().st_size)
             if key in seen:
+                if not seen[key].get("preview"):
+                    seen[key]["preview"] = find_preview(path)
                 continue
-            seen.add(key)
-            items.append({
+            item = {
                 "name": path.name,
                 "relative": path.name,
                 "path": str(path),
                 "source": "ComfyUI Diffusion",
                 "size": path.stat().st_size,
-                "architecture": "Krea-2",
+                "architecture": architecture_name,
                 "preview": find_preview(path),
-            })
+            }
+            items.append(item)
+            seen[key] = item
     items.sort(key=lambda item: item["name"].lower())
     with cache_lock:
         model_cache[kind] = items
@@ -895,7 +1147,7 @@ def build_workflow(payload: dict) -> dict:
     checkpoint_lower = str(checkpoint).lower()
     if architecture_name == "Z-Image" or any(tag in checkpoint_lower for tag in ("zimage", "z-image", "z_image")):
         workflow = {
-            "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "z-image-turbo_fp8_scaled_e4m3fn_KJ.safetensors", "weight_dtype": "default"}},
+            "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": checkpoint}},
             "4": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3_4b_fp8_scaled.safetensors", "type": "lumina2", "device": "default"}},
             "5": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["4", 0]}},
             "6": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["5", 0]}},
@@ -930,9 +1182,17 @@ def build_workflow(payload: dict) -> dict:
     # Krea-2 Turbo is a split 12B diffusion model. It requires the Krea-specific
     # Qwen3-VL text encoder and uses distilled 8-step sampling with zeroed
     # negative conditioning (CFG is disabled by the model design).
-    if architecture_name == "Krea-2" or any(tag in checkpoint_lower for tag in ("krea2", "krea-2", "krea_2")):
+    if architecture_name == "Krea-2" or any(tag in checkpoint_lower for tag in ("krea2", "krea-2", "krea_2", "darkbeast")):
+        # Krea-2 can be installed either as a lightweight GGUF UNet or as a
+        # checkpoint-format model such as Krea2 DarkBeast.  Both use the same
+        # Krea text encoder/VAE pipeline; only the model loader differs.
+        model_loader = "UnetLoaderGGUF" if checkpoint_lower.endswith(".gguf") else "CheckpointLoaderSimple"
         workflow = {
-            "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": checkpoint}},
+            "1": {"class_type": model_loader, "inputs": {
+                "unet_name": checkpoint
+            } if model_loader == "UnetLoaderGGUF" else {
+                "ckpt_name": checkpoint
+            }},
             "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "krea2", "device": "default"}},
             "3": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["2", 0]}},
             "4": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["3", 0]}},
@@ -960,6 +1220,134 @@ def build_workflow(payload: dict) -> dict:
             }},
             "8": {"class_type": "VAEDecode", "inputs": {"samples": ["7", 0], "vae": ["6", 0]}},
             "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "Froja/Krea2", "images": ["8", 0]}},
+        })
+        return workflow
+
+    # FLUX.2 Klein 4B distilled is the compact FLUX.2 path for 12 GB GPUs. It
+    # uses a single Qwen3 encoder, FLUX.2 latent/scheduler nodes and four steps.
+    if architecture_name == "Flux2-Klein":
+        model_loader = "UnetLoaderGGUF" if checkpoint_lower.endswith(".gguf") else "UNETLoader"
+        workflow = {
+            "1": {"class_type": model_loader, "inputs": {
+                "unet_name": checkpoint, **({} if model_loader == "UnetLoaderGGUF" else {"weight_dtype": "default"})
+            }},
+            "2": {"class_type": "CLIPLoader", "inputs": {
+                "clip_name": "qwen_3_4b_fp4_flux2.safetensors", "type": "flux2", "device": "default",
+            }},
+            "3": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["2", 0]}},
+            "4": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["3", 0]}},
+            "5": {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
+            "6": {"class_type": "VAELoader", "inputs": {"vae_name": "flux2-vae.safetensors"}},
+        }
+        model_ref = ["1", 0]
+        next_id = 20
+        for lora in combined_loras[:8]:
+            if not lora.get("name"):
+                continue
+            node_id = str(next_id)
+            workflow[node_id] = {"class_type": "LoraLoaderModelOnly", "inputs": {
+                "model": model_ref, "lora_name": lora["name"],
+                "strength_model": float(lora.get("strength", 0.8)),
+            }}
+            model_ref = [node_id, 0]
+            next_id += 1
+        workflow.update({
+            "7": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed}},
+            "8": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+            "9": {"class_type": "Flux2Scheduler", "inputs": {"steps": 4, "width": width, "height": height}},
+            "10": {"class_type": "CFGGuider", "inputs": {
+                "model": model_ref, "positive": ["3", 0], "negative": ["4", 0], "cfg": 1.0,
+            }},
+            "11": {"class_type": "SamplerCustomAdvanced", "inputs": {
+                "noise": ["7", 0], "guider": ["10", 0], "sampler": ["8", 0],
+                "sigmas": ["9", 0], "latent_image": ["5", 0],
+            }},
+            "12": {"class_type": "VAEDecode", "inputs": {"samples": ["11", 0], "vae": ["6", 0]}},
+            "13": {"class_type": "SaveImage", "inputs": {"filename_prefix": "Froja/Flux2Klein", "images": ["12", 0]}},
+        })
+        return workflow
+
+    # Mage-Flow Turbo INT8 is a current 4B image model. Reuse the installed FP8
+    # Qwen3-VL encoder so the total working set remains suitable for 12 GB VRAM.
+    if architecture_name == "Mage-Flow" or "mage_flow" in checkpoint_lower or "mage-flow" in checkpoint_lower:
+        workflow = {
+            "1": {"class_type": "UNETLoader", "inputs": {"unet_name": checkpoint, "weight_dtype": "default"}},
+            "2": {"class_type": "CLIPLoader", "inputs": {
+                "clip_name": "qwen3vl_4b_fp8_scaled.safetensors", "type": "mage", "device": "default",
+            }},
+            "3": {"class_type": "VAELoader", "inputs": {"vae_name": "mage_flow_vae_bf16.safetensors"}},
+            "4": {"class_type": "TextEncodeMageFlowEdit", "inputs": {
+                "clip": ["2", 0], "prompt": prompt, "negative_prompt": negative,
+                "images": {}, "width": width, "height": height, "batch_size": 1, "vae": ["3", 0],
+            }},
+        }
+        model_ref = ["1", 0]
+        next_id = 20
+        for lora in combined_loras[:8]:
+            if not lora.get("name"):
+                continue
+            node_id = str(next_id)
+            workflow[node_id] = {"class_type": "LoraLoaderModelOnly", "inputs": {
+                "model": model_ref, "lora_name": lora["name"],
+                "strength_model": float(lora.get("strength", 0.8)),
+            }}
+            model_ref = [node_id, 0]
+            next_id += 1
+        workflow.update({
+            "5": {"class_type": "KSampler", "inputs": {
+                "model": model_ref, "seed": seed, "steps": 4, "cfg": 1.0,
+                "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
+                "positive": ["4", 0], "negative": ["4", 1], "latent_image": ["4", 2],
+            }},
+            "6": {"class_type": "VAEDecode", "inputs": {"samples": ["5", 0], "vae": ["3", 0]}},
+            "7": {"class_type": "SaveImage", "inputs": {"filename_prefix": "Froja/MageFlow", "images": ["6", 0]}},
+        })
+        return workflow
+
+    # Flux checkpoints and exported Flux UNets need their own text encoders,
+    # Flux guidance and SD3 latent.  Do not reuse the SD/SDXL checkpoint CLIP:
+    # many Flux files intentionally contain only the diffusion model.
+    if architecture_name == "Flux" or "flux" in checkpoint_lower:
+        workflow = {
+            "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": checkpoint}},
+            "2": {"class_type": "DualCLIPLoader", "inputs": {
+                "clip_name1": "t5xxl_fp8_e4m3fn.safetensors",
+                "clip_name2": "clip_l.safetensors",
+                "type": "flux",
+                "device": "default",
+            }},
+            "3": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["2", 0]}},
+            "4": {"class_type": "FluxGuidance", "inputs": {"conditioning": ["3", 0], "guidance": 3.5}},
+            "5": {"class_type": "CLIPTextEncode", "inputs": {"text": negative, "clip": ["2", 0]}},
+            "6": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
+            "7": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
+        }
+        model_ref = ["1", 0]
+        clip_ref = ["2", 0]
+        next_id = 20
+        for lora in combined_loras[:8]:
+            if not lora.get("name"):
+                continue
+            node_id = str(next_id)
+            workflow[node_id] = {"class_type": "LoraLoader", "inputs": {
+                "model": model_ref, "clip": clip_ref, "lora_name": lora["name"],
+                "strength_model": float(lora.get("strength", 0.8)),
+                "strength_clip": float(lora.get("strength", 0.8)),
+            }}
+            model_ref, clip_ref = [node_id, 0], [node_id, 1]
+            next_id += 1
+        sampling_id = str(next_id)
+        workflow[sampling_id] = {"class_type": "ModelSamplingFlux", "inputs": {
+            "model": model_ref, "max_shift": 1.15, "base_shift": 0.5, "width": width, "height": height,
+        }}
+        workflow.update({
+            "8": {"class_type": "KSampler", "inputs": {
+                "model": [sampling_id, 0], "seed": seed, "steps": max(1, min(50, steps)), "cfg": 1.0,
+                "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0,
+                "positive": ["4", 0], "negative": ["5", 0], "latent_image": ["6", 0],
+            }},
+            "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["7", 0]}},
+            "10": {"class_type": "SaveImage", "inputs": {"filename_prefix": "Froja/Flux", "images": ["9", 0]}},
         })
         return workflow
 
@@ -1015,6 +1403,19 @@ class FrojaHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         query = urllib.parse.parse_qs(parsed.query)
+        if parsed.path == "/api/training-session":
+            return json_response(self, load_training_session())
+        if parsed.path == "/api/materials":
+            return json_response(self, scan_material_library())
+        if parsed.path == "/api/material-image":
+            relative = urllib.parse.unquote(query.get("path", [""])[0]).replace("\\", "/").strip("/")
+            candidate = (MATERIAL_LIBRARY / relative).resolve()
+            root = MATERIAL_LIBRARY.resolve()
+            if not relative or root not in candidate.parents or not candidate.is_file() or candidate.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+                return self.send_error(404)
+            data = candidate.read_bytes()
+            content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
+            self.send_response(200); self.send_header("Content-Type", content_type); self.send_header("Content-Length", str(len(data))); self.send_header("Cache-Control", "no-cache"); self.end_headers(); self.wfile.write(data); return
         if parsed.path == "/api/status":
             ready = comfy_ready()
             stats = None
@@ -1027,6 +1428,7 @@ class FrojaHandler(SimpleHTTPRequestHandler):
                 "engine": "ready" if ready else "starting",
                 "counts": {kind: len(scan_models(kind)) for kind in MODEL_ROOTS},
                 "stats": stats,
+                "video_engine": wangp_status(),
             })
         if parsed.path == "/api/extensions":
             manifests = extension_manifests()
@@ -1053,7 +1455,8 @@ class FrojaHandler(SimpleHTTPRequestHandler):
             return json_response(self, {"items": items[:limit], "total": len(items)})
         if parsed.path == "/api/preview":
             requested = Path(urllib.parse.unquote(query.get("path", [""])[0]))
-            allowed = any(str(requested).lower().startswith(str(root).lower()) for roots in MODEL_ROOTS.values() for root in roots)
+            preview_roots = [root for roots in MODEL_ROOTS.values() for root in roots] + [SPECIAL_DIFFUSION_ROOT]
+            allowed = any(str(requested).lower().startswith(str(root).lower()) for root in preview_roots)
             if not allowed or not requested.is_file():
                 return self.send_error(404)
             data = requested.read_bytes()
@@ -1160,6 +1563,25 @@ class FrojaHandler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        if self.path == "/api/materials/open-folder":
+            try:
+                return json_response(self, open_material_library())
+            except Exception as exc:
+                return json_response(self, {"error": str(exc)}, 500)
+        if self.path == "/api/training-session":
+            try:
+                return json_response(self, save_training_session(read_json_body(self)))
+            except Exception as exc:
+                return json_response(self, {"error": str(exc)}, 400)
+        if self.path == "/api/dataset/export":
+            try:
+                data = build_dataset_zip(read_json_body(self))
+                self.send_response(200); self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", 'attachment; filename="froja-lora-dataset.zip"')
+                self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
+            except Exception as exc:
+                return json_response(self, {"error": str(exc)}, 400)
+            return
         if self.path == "/api/open-output":
             try:
                 payload = read_json_body(self)
@@ -1169,6 +1591,11 @@ class FrojaHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/enhance-image":
             try:
                 return json_response(self, enhance_image(read_json_body(self)))
+            except Exception as error:
+                return json_response(self, {"error": str(error)}, 400)
+        if self.path == "/api/image-metadata":
+            try:
+                return json_response(self, read_image_metadata(read_json_body(self)))
             except Exception as error:
                 return json_response(self, {"error": str(error)}, 400)
         if self.path == "/api/image-to-prompt":
@@ -1251,6 +1678,11 @@ class FrojaHandler(SimpleHTTPRequestHandler):
             try:
                 release_engine_memory("extension", "joyai")
                 payload = read_json_body(self)
+                selected = str(payload.get("checkpoint", ""))
+                known = next((item for item in scan_models("checkpoints") if item["relative"] == selected), None)
+                if not known:
+                    return json_response(self, {"error": "The selected file is not a valid Froja checkpoint. Choose a main model; LoRA adapters belong in the LoRA selector."}, 400)
+                payload["architecture"] = known["architecture"]
                 workflow = build_workflow(payload)
                 result = comfy_request("/prompt", {"prompt": workflow, "client_id": "froja"}, timeout=30)
                 if "prompt_id" not in result:
@@ -1296,7 +1728,10 @@ if __name__ == "__main__":
     OUTPUTS.mkdir(exist_ok=True)
     LOGS.mkdir(exist_ok=True)
     warm_up()
-    froja_port = int(os.environ.get("FROJA_PORT", "3000"))
+    # Port 3000 is commonly reserved by Windows/Hyper-V.  Use an unreserved
+    # local default while still allowing installers and advanced users to
+    # override it through FROJA_PORT.
+    froja_port = int(os.environ.get("FROJA_PORT", "3210"))
     if not 1 <= froja_port <= 65535:
         raise ValueError("FROJA_PORT must be between 1 and 65535.")
     print(f"Froja Image Studio: http://127.0.0.1:{froja_port}")
