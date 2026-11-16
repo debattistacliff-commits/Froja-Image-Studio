@@ -49,6 +49,9 @@ Froja brings common generative-image tasks into one clean interface while leavin
 - Image enhancement, image-to-image, inpainting, ControlNet, face tools, repair, smart edit, character &amp; object transformer.
 - 3D Relight room for IC-Light.
 - Variation Lab, Prompt Batch, Reference Composer, Sketch &amp; 3D, Portrait Transformer, LoRA dataset and training studios.
+- Froja Training Studio for controlled eight-view LoRA datasets, with full-quality inspection, zoom and approval controls.
+- Appearance Library with realistic materials, body, hair, hands, landscape and fabric references.
+- Prompt Cards and reusable custom wildcards for repeatable training combinations.
 - Video Studio (local LTX, optional MiniMax H3 with sound).
 - History and Favorites with generation metadata and zoom.
 - Coordinated memory hand-off between isolated ComfyUI engines and Ollama.
