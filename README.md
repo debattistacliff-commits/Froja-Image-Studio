@@ -1,44 +1,65 @@
 # Froja Image Studio
 
 <p align="center">
-  <img src="public/froja-mark.png" width="128" alt="Froja Image Studio emblem" />
+  <img src="public/brand/froja-logo-3d.png" width="720" alt="Froja Image Studio — 3D logo" />
 </p>
 
 <p align="center">
-  A modern, local-first image studio built around ComfyUI, your own models, and an approachable creative workflow.
+  A local-first image and video studio for ComfyUI and Ollama — every studio is a slide, every control glows like a real LED.
 </p>
 
 <p align="center">
-  <strong>Text to image · Image to prompt · LoRA library · Enhancement · Relighting · Repair · Face tools · Ollama assistance</strong>
+  <strong>Create step by step · Styles &amp; Artists · Cameras · 23 tools · 3D Relight room · Video with sound · Training · System monitor</strong>
 </p>
 
-> **Project status:** active work in progress. The main generation workflow is usable today; advanced editing workflows are experimental and depend on the ComfyUI nodes and models installed on the user's machine.
+> **Project status:** active work in progress. The main generation workflow is usable today; some advanced workflows are experimental and depend on the ComfyUI nodes and models installed on your computer.
 
-![Froja Image Studio interface](docs/images/froja-studio.png)
+![Froja studios slider](docs/screenshots/01-studios.jpg)
+
+## What's new in 0.2
+
+- **Everything is a slide.** Froja opens on a slider of studios — Create, Styles &amp; Artists, My Pictures, Tools, Video, Training, Models &amp; LoRAs and Settings. Slide with the arrows, the mouse wheel or the keyboard, press the glowing power button and you go inside.
+- **Create in four steps:** 1 · Prompt → 2 · Style &amp; Artists → 3 · Camera → 4 · Model &amp; Generate, with your picture always visible.
+- **Cameras as real product photos** (cinema, portrait 85 mm, medium format, wide, street, telephoto, macro, vintage anamorphic) — Froja photographed them itself.
+- **Tools slider** with 23 tools, each with its own cover picture and glowing symbol.
+- **3D Relight room:** place up to three lights (Key, Fill, Rim) around your picture, choose height, strength, colour and soft/hard light, or start from a preset (Rembrandt, Butterfly, Split, Rim, Golden hour, Neon). Froja turns the lights into a light map for IC-Light, so the light lands where you put it.
+- **One look, many lights:** a black graphite design with brushed metal and LED details; pick the LED colour — ice blue, green, pink, purple, red, amber or white.
+- **System monitor:** CPU, GPU temperature, VRAM, RAM and drives as live LED read-outs, with plain-language advice (for example when a model is too big for your graphics card or RAM is nearly full).
+- **Picture sizes with names** (HD 720p, Full HD 1080p, Stories/Reels, Instagram square…) and the real size of every finished picture.
+- **Optional MiniMax H3 video with sound** for strong graphics cards (see below).
+- **Ollama steps aside** before a picture or video is made, so its models do not compete for graphics memory.
+
+| | |
+|---|---|
+| ![Create — prompt](docs/screenshots/02-create-prompt.jpg) | ![Create — camera](docs/screenshots/03-create-camera.jpg) |
+| ![Create — model and generate](docs/screenshots/04-create-generate.jpg) | ![Tools slider](docs/screenshots/05-tools.jpg) |
+| ![3D Relight room](docs/screenshots/06-relight-3d-room.jpg) | ![System monitor](docs/screenshots/07-system-monitor.jpg) |
+| ![Video Studio](docs/screenshots/08-video-studio.jpg) | ![Pink LED colour](docs/screenshots/09-led-colours-pink.jpg) |
 
 ## Why Froja?
 
-Froja brings common generative-image tasks into one clean interface while leaving model ownership with the user. It indexes existing model folders instead of duplicating multi-gigabyte files. Your prompts, images, models, and Ollama conversations remain on your computer.
+Froja brings common generative-image tasks into one clean interface while leaving model ownership with you. It indexes your existing model folders instead of duplicating multi-gigabyte files. Your prompts, images, models and Ollama conversations stay on your computer.
 
-### Highlights
+### Everything Froja can do
 
-- Local text-to-image generation through ComfyUI.
-- Checkpoint, LoRA, VAE, and embedding discovery from configurable folders.
-- Model and LoRA preview images plus trigger-word metadata.
-- Prompt and negative-prompt editing.
-- Automatic `<lora:name:strength>` recognition.
-- Z-Image Turbo and Krea-2 Turbo workflow builders.
-- Image-to-prompt recognition with an Ollama vision model.
-- Prompt creation and enhancement with Ollama.
-- Image enhancement with sharpen, denoise, dust reduction, lighting, colour, and upscale controls.
-- Image-to-image, inpainting, and ControlNet entry points.
-- IC-Light relighting controls.
-- Face replacement and face restoration tools.
-- Repair tools for faces, hands, bodies, and selected regions.
-- JoyAI natural-language image editing integration.
-- Local History and Favorites with generation metadata and zoom.
-- Built-in bronze, teal, and cosmic themes, custom backgrounds, font scaling, and multiple interface languages.
-- Coordinated VRAM handoff between isolated ComfyUI engines.
+- Local text-to-image generation through ComfyUI (Krea-2, Flux, SDXL, Z-Image, MiniMax H3 Image and more).
+- Checkpoint, LoRA, VAE and embedding discovery from configurable folders, with previews and trigger words.
+- Prompt enhancement, prompt helper, image-to-prompt and multi-reference prompts with Ollama.
+- Styles &amp; artist influences, camera looks, picture sizes with familiar names.
+- Image enhancement, image-to-image, inpainting, ControlNet, face tools, repair, smart edit, character &amp; object transformer.
+- 3D Relight room for IC-Light.
+- Variation Lab, Prompt Batch, Reference Composer, Sketch &amp; 3D, Portrait Transformer, LoRA dataset and training studios.
+- Video Studio (local LTX, optional MiniMax H3 with sound).
+- History and Favorites with generation metadata and zoom.
+- Coordinated memory hand-off between isolated ComfyUI engines and Ollama.
+
+## Launch Froja
+
+- **Double-click `START_FROJA.bat`** — the window shows Froja's activity; keep it open while you work.
+- Or **double-click `LAUNCH_FROJA.vbs`** — the same, started for you.
+- **Desktop shortcut with the Froja icon:** right-click `INSTALL_SHORTCUTS.ps1` → *Run with PowerShell*. It adds *Froja Image Studio* to your desktop and Start menu.
+
+Froja opens in your browser at `http://127.0.0.1:3310`. The launcher reads the path of your ComfyUI Python from `config/config.local.json` (`comfy_python`), so it works wherever ComfyUI is installed.
 
 ## Requirements
 
@@ -58,7 +79,7 @@ Froja does **not** download checkpoints or LoRAs automatically and does not incl
 2. Double-click `SETUP_WINDOWS.bat`.
 3. Open `config/config.local.json` and enter the path to your ComfyUI installation.
 4. Double-click `START_FROJA.bat`.
-5. Open `http://127.0.0.1:3000` if the browser does not open automatically.
+5. Open `http://127.0.0.1:3310` if the browser does not open automatically.
 
 Developer installation:
 
@@ -145,6 +166,30 @@ Ollama normally listens at `http://127.0.0.1:11434`. Change `ollama_url` in `con
 ## Z-Image Turbo and Krea-2
 
 Froja includes workflow builders for these architectures, but users must obtain compatible weights legally and install their required text encoders, VAEs, and ComfyUI nodes. Filenames and node availability vary between releases; see [docs/MODELS.md](docs/MODELS.md).
+
+## Optional: MiniMax H3 video (video with sound)
+
+Froja's Video Studio can make short videos **with sound** from a text prompt or a starting picture using MiniMax H3. It is **switched off by default**, because video is heavy work for a graphics card.
+
+| Graphics card | What Froja allows |
+| --- | --- |
+| 24 GB or more | Recommended: up to about 5 seconds, larger size |
+| 16 GB | Works well: up to about 4 seconds |
+| 12 GB | Safe mode: about 3 seconds, small size, roughly 7 minutes per clip (tested on an RTX 4070 Ti) |
+| less than 12 GB | Not supported |
+
+To use it:
+
+1. Follow the official [MiniMax-H3 tutorial](https://docs.comfy.org/tutorials/video/minimax/minimax-h3) and put these files in your ComfyUI `models` folder:
+   - `diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors`
+   - `text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`
+   - `vae/minimax_h3_video_vae_fp16.safetensors` and `vae/minimax_h3_audio_vae_fp32.safetensors`
+2. Install the turbo node and LoRA (needed for 12–16 GB cards):
+   - `git clone https://github.com/larryvrh/ComfyUI-MiniMax-H3-Turbo` into `ComfyUI/custom_nodes`
+   - `loras/minimax_h3_turbo_v4_step600_ema.safetensors` from [MiniMax-H3-Turbo-Lora](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora)
+3. In Froja open **Video Studio**, choose **MiniMax H3 · video + sound** and switch it on. Froja checks the files and your graphics card and tells you in plain words what it can do.
+
+Froja starts the MiniMax engine only for a job (on port 9020, set `minimax_video_url` in `config/config.local.json` to change it), frees memory from the picture engines first, makes one clip at a time, and stops the video engine again afterwards.
 
 ## Privacy and model safety
 

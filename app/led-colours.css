@@ -1,0 +1,46 @@
+/* Froja has one look (black graphite) and many LED colours. Each colour sets the same few variables
+   on every part that glows: the app, the sliders, the station bar and the sidebar button. */
+.studio:is(.led-blue, .led-green, .led-pink, .led-purple, .led-red, .led-amber, .led-white),
+.studio:is(.led-blue, .led-green, .led-pink, .led-purple, .led-red, .led-amber, .led-white) :is(.tool-deck, .station-bar, .deck-launch) {
+  --teal: var(--sk-led) !important;
+}
+.studio.led-blue, .studio.led-blue :is(.tool-deck, .station-bar, .deck-launch) {
+  --sk-led: #2fc6ff !important; --sk-led-hot: #b9efff !important; --sk-led-glow: rgba(47,198,255,.55) !important; --sk-led-soft: rgba(47,198,255,.14) !important; --sk-accent-ink: #5cd3ff !important; }
+.studio.led-green, .studio.led-green :is(.tool-deck, .station-bar, .deck-launch) {
+  --sk-led: #2cf07a !important; --sk-led-hot: #c4ffd9 !important; --sk-led-glow: rgba(44,240,122,.5) !important; --sk-led-soft: rgba(44,240,122,.13) !important; --sk-accent-ink: #5dffa0 !important; }
+.studio.led-pink, .studio.led-pink :is(.tool-deck, .station-bar, .deck-launch) {
+  --sk-led: #ff4fd8 !important; --sk-led-hot: #ffc6f3 !important; --sk-led-glow: rgba(255,79,216,.55) !important; --sk-led-soft: rgba(255,79,216,.14) !important; --sk-accent-ink: #ff7be3 !important; }
+.studio.led-purple, .studio.led-purple :is(.tool-deck, .station-bar, .deck-launch) {
+  --sk-led: #9d6bff !important; --sk-led-hot: #dccbff !important; --sk-led-glow: rgba(157,107,255,.55) !important; --sk-led-soft: rgba(157,107,255,.15) !important; --sk-accent-ink: #b896ff !important; }
+.studio.led-red, .studio.led-red :is(.tool-deck, .station-bar, .deck-launch) {
+  --sk-led: #ff3b2f !important; --sk-led-hot: #ffc2bd !important; --sk-led-glow: rgba(255,59,47,.55) !important; --sk-led-soft: rgba(255,59,47,.14) !important; --sk-accent-ink: #ff6a5f !important; }
+.studio.led-amber, .studio.led-amber :is(.tool-deck, .station-bar, .deck-launch) {
+  --sk-led: #ffb020 !important; --sk-led-hot: #ffe2a6 !important; --sk-led-glow: rgba(255,176,32,.5) !important; --sk-led-soft: rgba(255,176,32,.13) !important; --sk-accent-ink: #ffc04d !important; }
+.studio.led-white, .studio.led-white :is(.tool-deck, .station-bar, .deck-launch) {
+  --sk-led: #dfe9ff !important; --sk-led-hot: #ffffff !important; --sk-led-glow: rgba(220,235,255,.45) !important; --sk-led-soft: rgba(220,235,255,.1) !important; --sk-accent-ink: #f0f5ff !important; }
+
+/* The red "OFF" glow on switches only makes sense next to a cool ON colour */
+.studio.theme-graphite:not(.led-blue):not(.led-green):not(.led-purple):not(.led-white) input[type=checkbox]:not([hidden]):not(:checked) {
+  background: #141518 !important; box-shadow: inset 0 2px 6px rgba(0,0,0,.85), 0 0 0 2px #08090a, 0 0 0 3px rgba(255,255,255,.06) !important;
+}
+
+/* The picker: a row of little LEDs */
+.led-picker { display: inline-flex; gap: 7px; align-items: center; padding: 6px 10px; border-radius: 999px; background: #08090a;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.06); }
+.led-picker .led-swatch { width: 16px !important; height: 16px !important; min-width: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important; cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6), inset 0 1px 1px rgba(255,255,255,.35) !important; opacity: .55; transition: opacity .2s, box-shadow .2s, transform .15s; }
+.led-picker .led-swatch:hover { opacity: .9; transform: scale(1.12); }
+.led-picker .led-swatch.picked { opacity: 1; box-shadow: 0 0 0 2px #e7e9ec, 0 0 10px 2px currentColor !important; }
+.led-picker .led-dot-blue   { color: #2fc6ff; background: radial-gradient(circle at 40% 35%, #d6f5ff, #2fc6ff 55%, #0b6e99) !important; }
+.led-picker .led-dot-green  { color: #2cf07a; background: radial-gradient(circle at 40% 35%, #d6ffe6, #2cf07a 55%, #0c7a38) !important; }
+.led-picker .led-dot-pink   { color: #ff4fd8; background: radial-gradient(circle at 40% 35%, #ffe0f8, #ff4fd8 55%, #9a1b80) !important; }
+.led-picker .led-dot-purple { color: #9d6bff; background: radial-gradient(circle at 40% 35%, #ebe1ff, #9d6bff 55%, #4b25a3) !important; }
+.led-picker .led-dot-red    { color: #ff3b2f; background: radial-gradient(circle at 40% 35%, #ffd2ce, #ff3b2f 55%, #9e1810) !important; }
+.led-picker .led-dot-amber  { color: #ffb020; background: radial-gradient(circle at 40% 35%, #fff0cc, #ffb020 55%, #9a5f00) !important; }
+.led-picker .led-dot-white  { color: #dfe9ff; background: radial-gradient(circle at 40% 35%, #ffffff, #dfe9ff 55%, #8a96ad) !important; }
+.station-bar .sb-led { margin-left: auto; }
+.station-bar .sb-steps + .sb-stepnav + .sb-led, .station-bar .sb-steps ~ .sb-led { margin-left: 8px; }
+@media (max-width: 1400px) { .station-bar:has(.sb-steps) .sb-led { display: none; } }
+.station-bar:has(.sb-steps) .sb-led { order: 9; margin-left: 8px; }
+.tool-deck .deck-extra { margin-left: auto; margin-top: 14px; } .tool-deck .deck-extra + .deck-counter { margin-left: 16px; }
+@media (max-width: 1800px) { .station-bar:has(.sb-steps) .sb-led { display: none; } }

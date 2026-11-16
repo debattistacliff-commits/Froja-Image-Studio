@@ -1,0 +1,26 @@
+/* Optional dark brushed metal theme, inspired by physical cyan-lit controls. */
+.studio.theme-cyan-metal { --teal:#21dcf2; --froja-bg-image:none !important; color:#e4f5ff; background:#292c30 !important; }
+.studio.theme-cyan-metal::before,.studio.theme-cyan-metal::after { background:none !important; }
+.studio.theme-cyan-metal .leftbar,.studio.theme-cyan-metal .preview { background:repeating-linear-gradient(0deg,#ffffff03 0 1px,#00000003 1px 3px),linear-gradient(110deg,#424347,#26282b) !important; border-color:#656b70; }
+.studio.theme-cyan-metal .center { background:linear-gradient(110deg,#292d31,#191d21) !important; }
+.studio.theme-cyan-metal .center > header { background:linear-gradient(#454b50,#292e33); border-bottom:1px solid #6d797f; }
+.studio.theme-cyan-metal .leftbar nav button,.studio.theme-cyan-metal .leftbar .new-btn,.studio.theme-cyan-metal .leftbar .settings,.studio.theme-cyan-metal .prompt-foot button,.studio.theme-cyan-metal .tabs button,.studio.theme-cyan-metal .preview-tabs button,.studio.theme-cyan-metal .generate {
+ background:repeating-linear-gradient(0deg,#ffffff04 0 1px,#00000004 1px 3px),linear-gradient(120deg,#555a60,#292e34 45%,#3e444a) !important;
+ color:#b9eaff !important; border:1px solid #707a83 !important; border-bottom:3px solid #14181d !important; border-radius:10px; box-shadow:inset 0 1px 1px #a4adb880,inset 0 -1px 2px #060b10,0 3px 4px #0008; text-shadow:0 1px 2px #000; font-weight:650;
+}
+.studio.theme-cyan-metal .leftbar nav button { margin-bottom:5px; }
+.studio.theme-cyan-metal .leftbar nav button span { color:#b9eaff !important; }
+.studio.theme-cyan-metal .leftbar nav button .ui-icon { color:#29dff8 !important; filter:drop-shadow(0 0 3px #00c8e777); }
+.studio.theme-cyan-metal .leftbar nav button i { color:#c2f4ff; background:#152830; }
+.studio.theme-cyan-metal .leftbar nav button:hover,.studio.theme-cyan-metal .leftbar nav button.active,.studio.theme-cyan-metal .tabs button.on { border-color:#24d8f4 !important; box-shadow:inset 3px 0 #28dff7,0 0 7px #00bad344; }
+.studio.theme-cyan-metal button:active:not(:disabled) { transform:translateY(1px); }
+.studio.theme-cyan-metal .prompt-panel,.studio.theme-cyan-metal .style-picker,.studio.theme-cyan-metal .camera-summary,.studio.theme-cyan-metal .model-block { background:linear-gradient(120deg,#30353a,#20252a) !important; border:1px solid #67717a !important; box-shadow:inset 0 2px 5px #0009,0 1px #909ba166; border-radius:12px; }
+.studio.theme-cyan-metal :is(textarea,select,input:not([type=range]):not([type=checkbox]):not([type=color])) { background:#171e24 !important; color:#dcf2ff !important; border-color:#5b6c78 !important; }
+.studio.theme-cyan-metal input[type=range] { appearance:none; height:10px; border-radius:20px; background:linear-gradient(90deg,#15cce5,#134553); border:1px solid #89929a; box-shadow:inset 0 2px 3px #0009,0 1px #b9c2c8; accent-color:#1edaf1; }
+.studio.theme-cyan-metal input[type=range]::-webkit-slider-thumb { appearance:none; width:27px; height:27px; border-radius:50%; background:conic-gradient(#656c73,#181f26,#505962,#151c22,#656c73); border:2px solid #66727b; box-shadow:0 3px 4px #000a,inset 0 0 0 1px #111; cursor:grab; }
+.studio.theme-cyan-metal input[type=range]::-moz-range-thumb { width:24px; height:24px; border-radius:50%; background:conic-gradient(#656c73,#181f26,#505962,#151c22,#656c73); border:2px solid #66727b; }
+.studio.theme-cyan-metal .style-enable-switch input { width:52px; height:28px; border:2px solid #919ba2; background:#171e24; box-shadow:inset 0 2px 5px #000; }
+.studio.theme-cyan-metal .style-enable-switch input::after { width:22px; height:22px; left:1px; top:1px; background:conic-gradient(#666d74,#192028,#515a62,#151c22,#666d74); border:1px solid #84919b; }
+.studio.theme-cyan-metal .style-enable-switch input:checked { background:linear-gradient(#058ca8,#27e5f5); box-shadow:inset 0 2px 3px #00374c,0 0 7px #00d5ed66; }
+.studio.theme-cyan-metal .style-enable-switch input:checked::after { transform:translateX(24px); }
+.studio.theme-cyan-metal .generate { border-bottom:3px solid #24def5 !important; box-shadow:inset 0 1px #77858c,0 3px 8px #00d0ef33; }

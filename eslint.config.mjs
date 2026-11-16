@@ -4,7 +4,7 @@ import globals from "globals";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "node_modules/**", "release/**", "runtime/**", "logs/**"],
+    ignores: ["dist/**", "node_modules/**", "release/**", "runtime/**", "logs/**", ".codex_tmp/**", "output/**", "outputs/**", "test-output/**", "test-results/**"],
   },
   ...tseslint.configs.recommended,
   {

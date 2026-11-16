@@ -30,6 +30,8 @@ test("keeps the main local workflows connected", async () => {
 
   for (const route of [
     "/api/generate",
+    "/api/private-video/generate",
+    "/api/private-video/cancel",
     "/api/image-tool",
     "/api/relight",
     "/api/repair",

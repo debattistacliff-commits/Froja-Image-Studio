@@ -1,0 +1,69 @@
+/* System monitor: an LED read-out strip and a details panel. Colours follow the chosen LED colour. */
+.sysmon-strip {
+  display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  border: 0 !important; color: #8a9198 !important; font: inherit;
+  background: #08090a !important; box-shadow: inset 0 2px 5px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.06) !important;
+}
+.sysmon-strip span { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.sysmon-strip i { font-style: normal; font-size: 9px; letter-spacing: .14em; color: #6b7178; }
+.sysmon-strip b { font-family: "DSEG14 Classic", Consolas, monospace; font-size: 11px; font-weight: 700; color: var(--sk-led, #2fc6ff);
+  text-shadow: 0 0 6px var(--sk-led-glow, rgba(47,198,255,.55)); letter-spacing: .04em; }
+.sysmon-strip .warn b { color: #ffb020; text-shadow: 0 0 6px rgba(255,176,32,.6); }
+.sysmon-strip .danger b { color: #ff3b2f; text-shadow: 0 0 6px rgba(255,59,47,.6); }
+.sysmon-strip .sysmon-alert { font-style: normal; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%;
+  font-size: 12px; font-weight: 800; color: #111; background: #ffb020; box-shadow: 0 0 10px rgba(255,176,32,.7); animation: sysmon-pulse 1.6s ease-in-out infinite; }
+.sysmon-strip.danger .sysmon-alert { background: #ff3b2f; box-shadow: 0 0 10px rgba(255,59,47,.7); }
+@keyframes sysmon-pulse { 50% { opacity: .45; } }
+.station-bar .sysmon-strip { margin-left: auto; }
+.station-bar:has(.sb-steps) .sysmon-strip { order: 8; margin-left: 8px; }
+.station-bar .sysmon-strip + .sb-led { margin-left: 8px; }
+.tool-deck .deck-extra { display: flex; gap: 12px; align-items: center; }
+@media (max-width: 1500px) { .station-bar:has(.sb-steps) .sysmon-strip { display: none; } }
+
+.sysmon-modal { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 24px;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(6px); }
+.sysmon-panel { width: min(980px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 24px 28px; border-radius: 30px; color: #e7e9ec;
+  background: url("/materials-ui/brushed-graphite.png"), linear-gradient(165deg, #3b3f45 0%, #2b2e33 42%, #202226 100%);
+  background-blend-mode: soft-light, normal;
+  box-shadow: 0 1px 0 rgba(255,255,255,.13) inset, 0 0 0 1px #08090a, -6px 10px 18px -10px var(--sk-led-glow, rgba(47,198,255,.55)), 0 30px 70px rgba(0,0,0,.75);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif; animation: tool-enter .5s cubic-bezier(.2,.8,.2,1) backwards; }
+.sysmon-panel header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
+.sysmon-panel h2 { margin: 0; font-size: 26px; }
+.sysmon-panel h3 { margin: 22px 0 10px; font-size: 13px; letter-spacing: .2em; text-transform: uppercase; color: #9aa0a7; }
+.sysmon-panel header small { color: #9aa0a7; }
+.sysmon-close { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; color: #e7e9ec;
+  background: radial-gradient(circle at 50% 30%, #2a2b2e, #141517 70%); box-shadow: 0 0 0 2px #0b0c0d; }
+.sysmon-close:hover { box-shadow: 0 0 0 2px var(--sk-led), 0 0 12px var(--sk-led-glow); }
+
+.sysmon-gauges { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 14px; }
+.sysmon-gauge { display: grid; justify-items: center; gap: 4px; padding: 14px 8px; border-radius: 22px; background: #0a0b0d;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.95), 0 1px 0 rgba(255,255,255,.07); --c: var(--sk-led, #2fc6ff); }
+.sysmon-gauge.warn { --c: #ffb020; } .sysmon-gauge.danger { --c: #ff3b2f; }
+.sysmon-gauge .ring { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle, #121315 0 60%, transparent 61%), conic-gradient(var(--c) calc(var(--p) * 360deg), #23262a 0);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c) 45%, transparent)); }
+.sysmon-gauge .ring b { font-family: "DSEG14 Classic", Consolas, monospace; font-size: 15px; color: var(--c); text-shadow: 0 0 8px color-mix(in srgb, var(--c) 60%, transparent); }
+.sysmon-gauge span { font-size: 13px; font-weight: 650; }
+.sysmon-gauge small { font-size: 11px; color: #8a9198; text-align: center; }
+
+.sysmon-drives { display: grid; gap: 10px; }
+.sysmon-drive { display: grid; grid-template-columns: 44px 1fr 200px; align-items: center; gap: 12px; --c: var(--sk-led, #2fc6ff); }
+.sysmon-drive.warn { --c: #ffb020; } .sysmon-drive.danger { --c: #ff3b2f; }
+.sysmon-drive .bar { height: 12px; border-radius: 999px; background: #0a0b0d; box-shadow: inset 0 2px 4px rgba(0,0,0,.95); overflow: hidden; }
+.sysmon-drive .bar span { display: block; height: 100%; border-radius: 999px; background: var(--c); box-shadow: 0 0 10px var(--c); }
+.sysmon-drive small { color: #9aa0a7; font-size: 12px; }
+
+.sysmon-advice { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sysmon-advice li { padding: 12px 14px 12px 40px; border-radius: 16px; background: #0d0e10; position: relative; line-height: 1.45; font-size: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+.sysmon-advice li::before { content: ""; position: absolute; left: 16px; top: 17px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--sk-led, #2fc6ff); box-shadow: 0 0 8px var(--sk-led-glow, rgba(47,198,255,.6)); }
+.sysmon-advice li.warn::before { background: #ffb020; box-shadow: 0 0 8px rgba(255,176,32,.7); }
+.sysmon-advice li.danger::before { background: #ff3b2f; box-shadow: 0 0 8px rgba(255,59,47,.7); }
+.sysmon-advice li.ok::before { background: #2cf07a; box-shadow: 0 0 8px rgba(44,240,122,.7); }
+.tool-deck.is-home .deck-title { pointer-events: none; z-index: 0; }
+.tool-deck.is-home .deck-extra { position: relative; z-index: 2; flex-direction: column; align-items: flex-end; gap: 8px; }
+@media (max-width: 1500px) { .tool-deck.is-home .deck-extra .sysmon-strip i { display: none; } }
+/* Create's bar already carries the steps: keep it calm (the monitor is on every other studio and on Home) */
+@media (max-width: 1900px) { .station-bar:has(.sb-steps) .sysmon-strip { display: none; } }
+.station-bar .sb-name { flex-shrink: 0; }

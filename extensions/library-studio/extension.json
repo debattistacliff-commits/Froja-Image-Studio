@@ -1,0 +1,17 @@
+{
+  "id": "froja-library-studio",
+  "name": "Froja Library Studio",
+  "version": "0.1.0-private",
+  "type": "private-library",
+  "enabled": true,
+  "local": true,
+  "private": true,
+  "engine": "localhost:9020",
+  "capabilities": [
+    "output-folder-indexing",
+    "metadata-search",
+    "favorites",
+    "collections",
+    "reuse-generation-settings"
+  ]
+}

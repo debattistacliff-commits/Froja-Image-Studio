@@ -2,6 +2,12 @@
 .drawer.wide { width: min(780px, 96vw); }
 .library-grid { overflow: auto; margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding-right: 3px; }
 .library-grid > button { min-width: 0; border: 1px solid #27363c; background: #131e23; border-radius: 9px; padding: 7px; text-align: left; position: relative; }
+.library-grid > button.pinned { border-color: #a98232; background: linear-gradient(155deg, #242315, #141e21 58%); box-shadow: 0 0 0 1px #d7ae4d24, 0 8px 24px #0005; }
+.lora-pin { position: absolute; z-index: 3; left: 13px; top: 13px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #8b999d; background: #071115df; border: 1px solid #526168; box-shadow: 0 2px 8px #0008; transition: .16s ease; }
+.lora-pin:hover { color: #ffe08a; border-color: #d7ae4d; transform: translateY(-1px) scale(1.05); }
+.lora-pin.active { color: #241600; background: linear-gradient(145deg, #ffe28a, #c9942d); border-color: #ffdf7a; box-shadow: 0 0 14px #eab94d88; }
+.lora-pin svg { width: 16px; height: 16px; fill: currentColor; stroke: currentColor; stroke-width: 1; }
+.favorite-label { display: inline-flex; margin-top: 6px; padding: 3px 7px; border-radius: 999px; color: #f6d77d; background: #8b651d38; border: 1px solid #b48a37; font-size: 9px; font-weight: 700; letter-spacing: .03em; }
 .library-grid > button:hover, .library-grid > button.selected { border-color: #10aca4; background: #14292a; transform: translateY(-1px); }
 .card-preview { height: 118px; border-radius: 6px; background: linear-gradient(145deg, #22343b, #0b1216); overflow: hidden; display: grid; place-items: center; position: relative; margin-bottom: 8px; color: #607278; font-size: 10px; }
 .card-preview img { width: 100%; height: 100%; object-fit: cover; }

@@ -10,7 +10,8 @@ call .venv\Scripts\python.exe -m pip install -r requirements.txt
 call npm install
 call npm run build
 if not exist config\config.local.json copy config\config.example.json config\config.local.json >nul
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALL_SHORTCUTS.ps1"
 echo.
 echo Setup complete. Edit config\config.local.json with your ComfyUI paths,
-echo then double-click START_FROJA.bat.
+echo then use the Froja Image Studio shortcut on your Desktop or Start Menu.
 pause

@@ -1,0 +1,37 @@
+.pt-lora-warning {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #8d6e24;
+  border-radius: 8px;
+  background: #241d0c;
+  color: #e5c65c;
+}
+
+.pt-lora-warning span { color: #bdac78; }
+
+.pt-lora-controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px;
+  align-items: center;
+  padding: 0 9px 8px;
+}
+
+.pt-lora-controls label {
+  display: grid;
+  grid-template-columns: 1fr 42px;
+  gap: 7px;
+}
+
+.pt-lora-controls button {
+  padding: 5px 8px;
+  border: 1px solid #3a626a;
+  border-radius: 6px;
+  background: #10242a;
+  color: #bfeceb;
+  cursor: pointer;
+}
+
+.pt-size-panel{display:grid;gap:10px}.pt-size-presets{display:grid;grid-template-columns:repeat(5,minmax(76px,1fr));gap:7px}.pt-size-presets button{min-height:91px;border:1px solid #2c424a;border-radius:8px;background:#0c171c;color:#d1dcdf;display:grid;grid-template-rows:42px auto auto;place-items:center;padding:7px 4px}.pt-size-presets button.selected{border-color:#19c9c0;background:#10272a;box-shadow:inset 0 0 18px #13c7bd20}.pt-size-presets i{display:block;max-width:38px;max-height:38px;width:auto;height:38px;background:#fff;border:1px solid #d7dce0;box-shadow:0 3px 9px #0008}.pt-size-presets b{font-size:9px}.pt-size-presets small{font-size:7px;color:#87969a}.pt-size-custom{display:grid;grid-template-columns:92px 1fr 100px 100px;gap:9px;align-items:center;padding:10px;border:1px solid #263a42;border-radius:9px;background:#0a1419}.pt-paper-stage{height:72px;display:grid;place-items:center;background:#071014;border-radius:6px;border:1px solid #21343b}.pt-paper-stage i{display:block;background:white;border:1px solid #dce2e5;box-shadow:0 5px 14px #000b;max-width:72px;max-height:58px;width:72px;height:auto}.pt-size-custom span b,.pt-size-custom span small{display:block}.pt-size-custom span small{margin-top:5px;color:#809096;font-size:8px}.pt-size-custom label{font-size:8px;color:#89979c}.pt-size-custom input{width:100%;margin-top:5px;padding:7px;background:#101a1f;border:1px solid #304149;border-radius:5px}@media(max-width:900px){.pt-size-presets{grid-template-columns:repeat(3,1fr)}.pt-size-custom{grid-template-columns:80px 1fr}.pt-size-custom label{grid-row:2}}
