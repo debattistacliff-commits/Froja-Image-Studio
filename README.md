@@ -56,6 +56,22 @@ Froja brings common generative-image tasks into one clean interface while leavin
 - History and Favorites with generation metadata and zoom.
 - Coordinated memory hand-off between isolated ComfyUI engines and Ollama.
 
+## Install Froja — the easy way (Windows)
+
+1. Download **[FROJA_INSTALLER.bat](https://github.com/debattistacliff-commits/Froja-Image-Studio/releases/latest/download/FROJA_INSTALLER.bat)** from the latest release.
+2. Double-click it and answer a few simple questions.
+
+The installer:
+- asks where to put Froja (default: your user folder),
+- checks Node.js and Python and offers to install them for you (it always asks first),
+- downloads the latest Froja from GitHub and prepares it,
+- connects your ComfyUI if you paste its folder (or lets you skip it for now),
+- offers Ollama for prompt help and Image to Prompt (optional),
+- adds a **Froja Image Studio** shortcut with the Froja icon to your desktop and Start menu,
+- and starts Froja.
+
+Running it again later updates Froja and keeps your settings.
+
 ## Launch Froja
 
 - **Double-click `START_FROJA.bat`** — the window shows Froja's activity; keep it open while you work.

@@ -414,5 +414,24 @@ class LightStageTests(unittest.TestCase):
         self.assertNotIn("12", plain)
 
 
+
+class LocalConfigTests(unittest.TestCase):
+    def test_settings_saved_with_a_bom_are_still_read(self):
+        import codecs
+        import os
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "config.local.json"
+            path.write_bytes(codecs.BOM_UTF8 + json.dumps({"comfy_root": "C:/AI/ComfyUI"}).encode("utf-8"))
+            previous = os.environ.get("FROJA_CONFIG")
+            os.environ["FROJA_CONFIG"] = str(path)
+            try:
+                self.assertEqual(backend.load_local_config()["comfy_root"], "C:/AI/ComfyUI")
+            finally:
+                if previous is None:
+                    os.environ.pop("FROJA_CONFIG", None)
+                else:
+                    os.environ["FROJA_CONFIG"] = previous
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -35,7 +35,7 @@ def load_local_config() -> dict:
     if not config_path.is_file():
         return {}
     try:
-        return json.loads(config_path.read_text(encoding="utf-8"))
+        return json.loads(config_path.read_text(encoding="utf-8-sig"))  # also accepts files saved by Notepad/PowerShell with a BOM
     except Exception as exc:
         raise RuntimeError(f"Froja could not read {config_path}: {exc}") from exc
 
