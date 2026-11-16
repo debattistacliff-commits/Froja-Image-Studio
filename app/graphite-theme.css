@@ -1,0 +1,187 @@
+/* Froja "Graphite LED" skin - wavy perforated black metal, brushed graphite plates, LED underglow,
+   dotted-grip ON/OFF switches and carbon-fibre knobs. Colours for every existing rule come from
+   graphite-theme.generated.css (scripts/build_skyline_theme.py graphite); this file adds the materials. */
+.studio.theme-graphite {
+  --sk-led: #2fc6ff;
+  --sk-led-hot: #b9efff;
+  --sk-led-glow: rgba(47, 198, 255, .55);
+  --sk-led-soft: rgba(47, 198, 255, .14);
+  --sk-accent-ink: #5cd3ff;
+  --gr-plate: linear-gradient(165deg, #3b3f45 0%, #2b2e33 42%, #202226 100%);
+  --gr-pill: linear-gradient(180deg, #4b4f56 0%, #363940 52%, #2b2d32 100%);
+  --gr-brushed: url("/materials-ui/brushed-graphite.png");
+  --gr-slot: #0a0b0d;
+  --gr-ink: #e7e9ec;
+  --gr-ink-soft: #9aa0a7;
+  --gr-edge: 0 1px 0 rgba(255,255,255,.13) inset, 0 -1px 0 rgba(0,0,0,.55) inset, 0 0 0 1px #08090a;
+  --teal: var(--sk-led) !important;
+  --froja-bg-image: none !important;
+  color: var(--gr-ink) !important;
+  background:
+    linear-gradient(rgba(0,0,0,.30), rgba(0,0,0,.30)),
+    url("/materials-ui/dotwave.jpg") center / cover no-repeat fixed,
+    #050607 !important;
+}
+.studio.theme-graphite.led-red {
+  --sk-led: #ff3b2f; --sk-led-hot: #ffc2bd; --sk-led-glow: rgba(255, 59, 47, .55); --sk-led-soft: rgba(255, 59, 47, .14);
+  --sk-accent-ink: #ff6a5f; --teal: #ff3b2f !important;
+}
+.studio.theme-graphite::before, .studio.theme-graphite::after { background: none !important; }
+html:has(.studio.theme-graphite), html:has(.studio.theme-graphite) body, html:has(.studio.theme-graphite) #root { background: #050607 !important; }
+.studio.theme-graphite.theme-graphite.has-custom-background, .studio.theme-graphite.theme-graphite {
+  background:
+    linear-gradient(rgba(0,0,0,.30), rgba(0,0,0,.30)),
+    url("/materials-ui/dotwave.jpg") center / cover no-repeat fixed,
+    #050607 !important;
+}
+
+/* ---------- Plates: brushed graphite with a hairline top highlight ---------- */
+.studio.theme-graphite :is(.leftbar, .center > header, .prompt-panel, .model-settings, .preview, .rightbar,
+  .style-picker, .model-block, .camera-summary, .engine-box,
+  .sn-studio, .vl-studio, .pbs-studio, .pt-studio, .sketch3d-studio, .reference-composer, .variation-studio,
+  .prompt-cards-studio, .generated-zoom-dialog, .training-inspector-modal, .drawer,
+  .modal > :is(div, section, article, form)) {
+  background: var(--gr-brushed), var(--gr-plate) !important;
+  background-blend-mode: soft-light, normal !important;
+  border-color: transparent !important;
+  color: var(--gr-ink) !important;
+  box-shadow: var(--gr-edge), 0 24px 50px rgba(0,0,0,.65), 0 6px 14px rgba(0,0,0,.5) !important;
+}
+.studio.theme-graphite :is(.leftbar, .center > header, .prompt-panel, .model-settings, .preview) { border-radius: 26px !important; }
+/* Tool windows: bigger rounded plate with the blue LED leaking out underneath, like the reference */
+.studio.theme-graphite :is(.sn-studio, .vl-studio, .pbs-studio, .pt-studio, .sketch3d-studio, .reference-composer,
+  .variation-studio, .prompt-cards-studio, .drawer, .modal > :is(div, section, article, form)) {
+  border-radius: 34px !important;
+  box-shadow: var(--gr-edge), -6px 10px 18px -10px var(--sk-led-glow), 0 30px 70px rgba(0,0,0,.75) !important;
+}
+/* Backdrops behind tool windows: the perforated metal, dimmed */
+.studio.theme-graphite :is(.modal, .sn-overlay, .vl-overlay, .pbs-overlay, .pt-overlay, .sketch3d-modal, .reference-composer-modal) {
+  background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url("/materials-ui/dotwave.jpg") center / cover no-repeat !important;
+  backdrop-filter: none !important;
+}
+.studio.theme-graphite .nav-label { color: var(--gr-ink-soft) !important; letter-spacing: .18em !important; }
+
+/* ---------- Buttons: graphite pills ---------- */
+.studio.theme-graphite button:not(:has(img, video, canvas)):not(.tool-deck *):not(.deck-launch):not([class*="swatch"]):not([class*="color"]) {
+  background: var(--gr-brushed), var(--gr-pill) !important;
+  background-blend-mode: soft-light, normal !important;
+  color: var(--gr-ink) !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  text-shadow: 0 -1px 0 rgba(0,0,0,.6) !important;
+  box-shadow: var(--gr-edge), 0 6px 12px rgba(0,0,0,.5) !important;
+  transition: transform .14s ease, box-shadow .2s ease, color .2s ease !important;
+}
+.studio.theme-graphite button:not(:has(img, video, canvas)):not(.tool-deck *):not(.deck-launch):not(:disabled):hover {
+  color: #fff !important;
+  box-shadow: var(--gr-edge), -4px 6px 14px -6px var(--sk-led-glow), 0 0 0 1px rgba(47,198,255,.0), 0 6px 12px rgba(0,0,0,.5) !important;
+}
+.studio.theme-graphite button:not(:has(img, video, canvas)):not(.tool-deck *):not(.deck-launch):not(:disabled):active {
+  transform: translateY(1px) !important;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.6), 0 0 0 1px #08090a !important;
+}
+.studio.theme-graphite button:disabled { opacity: .45 !important; }
+.studio.theme-graphite button :is(.ui-icon, svg) { color: currentColor !important; }
+.studio.theme-graphite .leftbar nav button { margin-bottom: 5px !important; }
+.studio.theme-graphite .leftbar .new-btn { border-radius: 999px !important; }
+
+/* Selected / on: the LED edge lights up */
+.studio.theme-graphite.theme-graphite.theme-graphite.theme-graphite :is(.on, .active, .selected, [aria-pressed="true"], [aria-selected="true"]):not(.tool-deck *) {
+  color: var(--sk-led-hot) !important;
+  box-shadow: inset 0 0 0 1px var(--sk-led), inset 0 0 12px var(--sk-led-soft), 0 0 14px -2px var(--sk-led-glow), 0 6px 12px rgba(0,0,0,.5) !important;
+}
+
+/* Counters / badges: LED read-outs in black slots */
+.studio.theme-graphite :is(.leftbar nav button i, .new-btn kbd, .header-state, .preview-tabs button span, .badge, .pill-count) {
+  background: var(--gr-slot) !important; color: var(--sk-led) !important;
+  font-family: "DSEG14 Classic", Consolas, monospace !important; font-style: normal !important; font-size: 10px !important;
+  letter-spacing: .08em !important; text-shadow: 0 0 6px var(--sk-led-glow) !important; white-space: nowrap !important;
+  border: 0 !important; border-radius: 999px !important; padding: 4px 9px !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.08) !important;
+}
+
+/* Main actions: black power buttons with a glowing LED ring */
+.studio.theme-graphite.theme-graphite.theme-graphite.theme-graphite :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button) {
+  background: radial-gradient(ellipse at 50% 20%, #26272a 0%, #141517 60%, #0d0e0f 100%) !important;
+  color: var(--sk-led-hot) !important; text-shadow: 0 0 8px var(--sk-led-glow) !important;
+  border: 0 !important; border-radius: 999px !important; letter-spacing: .06em !important; font-weight: 700 !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset, 0 0 0 2.5px var(--sk-led), 0 0 16px 3px var(--sk-led-glow),
+    0 0 0 6px #0b0c0d, 0 0 0 7px rgba(255,255,255,.06), 0 12px 24px rgba(0,0,0,.7) !important;
+}
+.studio.theme-graphite.theme-graphite.theme-graphite.theme-graphite :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button):not(:disabled):hover {
+  box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset, 0 0 0 2.5px var(--sk-led-hot), 0 0 28px 6px var(--sk-led-glow),
+    0 0 0 6px #0b0c0d, 0 0 0 7px rgba(255,255,255,.06), 0 12px 24px rgba(0,0,0,.7) !important;
+}
+.studio.theme-graphite.theme-graphite.theme-graphite.theme-graphite :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button):disabled {
+  opacity: 1 !important; color: #6c7177 !important; text-shadow: none !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 0 0 2.5px #2c2f33, 0 0 0 6px #0b0c0d, 0 0 0 7px rgba(255,255,255,.05), 0 10px 20px rgba(0,0,0,.6) !important;
+}
+
+/* ---------- Inputs: deep black slots ---------- */
+.studio.theme-graphite :is(input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=color]):not([type=file]), textarea, select) {
+  background: var(--gr-slot) !important; color: var(--gr-ink) !important;
+  border: 0 !important; border-radius: 14px !important;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.95), inset 0 0 0 1px #000, 0 1px 0 rgba(255,255,255,.08) !important;
+}
+.studio.theme-graphite :is(input, textarea)::placeholder { color: #5f656c !important; }
+.studio.theme-graphite :is(input, textarea, select):focus { outline: none !important;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.95), 0 0 0 1.5px var(--sk-led), 0 0 12px var(--sk-led-glow) !important; }
+.studio.theme-graphite option { background: #16171a; color: var(--gr-ink); }
+
+/* ---------- ON / OFF switch: dotted-grip knob, blue glow ON, red glow OFF ---------- */
+.studio.theme-graphite input[type=checkbox]:not([hidden]) {
+  appearance: none !important; -webkit-appearance: none !important;
+  position: relative; flex: 0 0 auto; width: 56px !important; height: 28px !important; margin: 0 6px 0 0; cursor: pointer;
+  border: 0 !important; border-radius: 999px !important; vertical-align: middle;
+  background: radial-gradient(ellipse 60% 90% at 78% 50%, #ff3346 0%, #b3121f 50%, #2a070a 100%) !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.85), 0 0 0 2px #08090a, 0 0 0 3px rgba(255,255,255,.06), 0 0 10px -2px rgba(255,40,60,.45) !important;
+  transition: background .25s, box-shadow .25s;
+}
+.studio.theme-graphite input[type=checkbox]:not([hidden])::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 32px; height: 24px; border-radius: 999px; border: 0 !important;
+  transform: none !important; padding: 6px 7px; box-sizing: border-box;
+  background:
+    radial-gradient(circle, rgba(0,0,0,.6) 0.9px, rgba(255,255,255,.12) 1.3px, transparent 1.7px) 0 0 / 4.5px 4.5px content-box,
+    linear-gradient(180deg, #54565b 0%, #3c3e42 55%, #303235 100%) border-box;
+  box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 3px 6px rgba(0,0,0,.6);
+  transition: left .25s cubic-bezier(.3,.7,.2,1);
+}
+.studio.theme-graphite input[type=checkbox]:not([hidden]):checked {
+  background: radial-gradient(ellipse 60% 90% at 22% 50%, var(--sk-led-hot) 0%, var(--sk-led) 45%, #072a3d 100%) !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.6), 0 0 0 2px #08090a, 0 0 0 3px rgba(255,255,255,.06), 0 0 14px -1px var(--sk-led-glow) !important;
+}
+.studio.theme-graphite input[type=checkbox]:not([hidden]):checked::after { left: 22px; }
+.studio.theme-graphite.led-red input[type=checkbox]:not([hidden]):not(:checked) {
+  background: #141518 !important; box-shadow: inset 0 2px 6px rgba(0,0,0,.85), 0 0 0 2px #08090a, 0 0 0 3px rgba(255,255,255,.06) !important;
+}
+.studio.theme-graphite input[type=radio] { accent-color: var(--sk-led); }
+.studio.theme-graphite .style-enable-switch > span { color: var(--gr-ink) !important; }
+
+/* ---------- Sliders: black slot + carbon-fibre knob with LED ring ---------- */
+.studio.theme-graphite input[type=range] {
+  -webkit-appearance: none !important; appearance: none !important; height: 8px !important; border-radius: 999px !important;
+  background: var(--gr-slot) !important; border: 0 !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.95), 0 1px 0 rgba(255,255,255,.08) !important;
+}
+.studio.theme-graphite input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none !important; width: 24px !important; height: 24px !important; border-radius: 50% !important; border: 0 !important;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255,255,255,.22), rgba(255,255,255,0) 55%),
+    repeating-conic-gradient(#2c2d30 0 25%, #151618 0 50%) 0 0 / 4px 4px !important;
+  box-shadow: 0 0 0 2px var(--sk-led), 0 0 10px var(--sk-led-glow), 0 3px 6px rgba(0,0,0,.7) !important;
+}
+.studio.theme-graphite input[type=range]::-moz-range-thumb {
+  width: 24px; height: 24px; border-radius: 50%; border: 0;
+  background: repeating-conic-gradient(#2c2d30 0 25%, #151618 0 50%) 0 0 / 4px 4px;
+  box-shadow: 0 0 0 2px var(--sk-led), 0 0 10px var(--sk-led-glow);
+}
+
+.studio.theme-graphite .steel-theme-toggle { background: var(--gr-pill) !important; color: var(--gr-ink) !important; border: 0 !important; border-radius: 999px !important; box-shadow: var(--gr-edge) !important; }
+.studio.theme-graphite .preview img { border-radius: 18px; box-shadow: 0 14px 30px rgba(0,0,0,.6); }
+
+.studio.theme-graphite ::-webkit-scrollbar { width: 10px; height: 10px; }
+.studio.theme-graphite ::-webkit-scrollbar-track { background: transparent; }
+.studio.theme-graphite ::-webkit-scrollbar-thumb { background: linear-gradient(90deg, #44474c, #2c2e32); border-radius: 999px; border: 2px solid #121315; }

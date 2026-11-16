@@ -1,6 +1,6 @@
 {
   "name": "froja-image-studio",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A modern local-first image studio for ComfyUI, Ollama, and user-owned model libraries.",
   "license": "MIT",
   "author": "debattistacliff-commits",
@@ -27,18 +27,20 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "start": "python backend.py",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs && node scripts/run-python-tests.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/image-sizes.test.mts && node scripts/run-python-tests.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "6.0.2",
     "eslint": "9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",

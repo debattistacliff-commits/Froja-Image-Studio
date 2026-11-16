@@ -1,4 +1,9 @@
 # Dependencies and build output
+experiments/LLaDa-Image_ComfyUI/
+experiments/llada-deps/
+experiments/llada-venv/
+experiments/llada-models/
+experiments/llada-hf-cache/
 node_modules/
 dist/
 .next/
@@ -66,3 +71,22 @@ release/
 # User-supplied local material references
 materials/library/*
 !materials/library/README.txt
+
+# Backups, experiments, test output and private data (kept on this PC only)
+*.before-*
+.codex_tmp/
+.patch-probe
+*.tmp
+experiments/coordinated-update-*/
+output/
+test-output/
+test-results/
+smart-edit-test-output.png
+CharacterTransformer_demo_bronze.png
+config/config.local*.json
+config/*.before-*
+data/
+extensions/library-studio/data/
+materials/library/*
+!materials/library/README.txt
+public/brand/froja-logo-3d-raw.png

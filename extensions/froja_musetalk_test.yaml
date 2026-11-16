@@ -1,0 +1,5 @@
+froja_talking_portrait:
+  video_path: "G:/Archive/JarvisVoiceAssistant/CivilAI-ImageStudio/outputs/video-editor/froja_talking_base.mp4"
+  audio_path: "G:/Archive/JarvisVoiceAssistant/CivilAI-ImageStudio/outputs/video-editor/froja_talking_voice.wav"
+  result_name: "froja_talking_portrait.mp4"
+  bbox_shift: 0

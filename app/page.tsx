@@ -1,8 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { appearanceCategories, appearanceLibrary } from "./appearance-library";
+import { appearanceLibrary } from "./appearance-library";
+import Sketch3DStudio from "./sketch-3d-studio";
+import "./sketch-3d-studio.css";
+import ReferenceComposerStudio from "./reference-composer-studio";
+import "./reference-composer-studio.css";
+import SenseNovaStudio from "./sensenova-studio";
+import LLaDAStudio from "./llada-studio";
+import KreaFastStudio from "./krea-fast-studio";
+import VariationLab from "./variation-lab";
+import PromptBatchStudio from "./prompt-batch-studio";
+import PortraitTransformer from "./portrait-transformer";
+import ToolDeck from "./tool-deck";
+import type { DeckTool } from "./tool-deck";
+import "./tool-deck.css";
+import StationBar, { LedPicker } from "./stations";
+import "./stations.css";
+import LightStage, { DEFAULT_LIGHTS } from "./light-stage";
+import type { StageLight } from "./light-stage";
+import "./light-stage.css";
+import { SIZE_PRESETS, describeSize, presetFor } from "./image-sizes";
+import SystemMonitor from "./system-monitor";
+import "./system-monitor.css";
 
 type Model = {
   name: string;
@@ -22,7 +43,7 @@ type TrainingTask = { name:string; position:string; environment:string };
 type TrainingResult = { id:string; image:string; name:string; position:string; environment:string; prompt:string; approved:boolean };
 type MaterialReference = { name:string; prompt:string; source:string; relative:string; preview:string };
 
-type IconName = "plus" | "home" | "create" | "library" | "preset" | "workflow" | "model" | "lora" | "embedding" | "image" | "video" | "enhance" | "inpaint" | "face" | "control" | "light" | "repair" | "wand" | "settings" | "palette";
+type IconName = "plus" | "home" | "create" | "library" | "preset" | "workflow" | "model" | "lora" | "embedding" | "image" | "video" | "enhance" | "inpaint" | "face" | "control" | "light" | "repair" | "wand" | "settings" | "palette" | "ai" | "speed" | "variants" | "material" | "train" | "cube" | "compose" | "dataset" | "transform";
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, string[]> = {
     plus:["M12 5v14","M5 12h14"], home:["m3 11 9-8 9 8","M5 10v10h14V10","M9 20v-6h6v6"],
@@ -36,7 +57,13 @@ function Icon({ name }: { name: IconName }) {
     control:["M12 3v18","M3 12h18","M7 7h10v10H7z"], light:["M9 18h6","M10 22h4","M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4Z"],
     repair:["M14 6 18 2l4 4-4 4","M16 8 8 16H4v-4L16 8Z","M5 5h5","M7.5 2.5v5"], wand:["m4 20 11-11","m14 4 1-2 1 2 2 1-2 1-1 2-1-2-2-1 2-1Z","m19 13 .7-1.5.8 1.5 1.5.8-1.5.7-.8 1.5-.7-1.5-1.5-.7 1.5-.8Z"],
     settings:["M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z","M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z"],
-    palette:["M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h5a4 4 0 0 0 4-4c0-3.3-4-6-9-6Z","M7.5 10h.01","M9 6.5h.01","M14 6h.01","M17 9h.01"]
+    palette:["M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h5a4 4 0 0 0 4-4c0-3.3-4-6-9-6Z","M7.5 10h.01","M9 6.5h.01","M14 6h.01","M17 9h.01"],
+    ai:["M8 4h8l3 4v8l-3 4H8l-3-4V8l3-4Z","M9 10h.01","M15 10h.01","M9 15c2 1 4 1 6 0","M12 1v3","M12 20v3"],
+    speed:["M13 3 6 14h6l-1 7 7-11h-6l1-7Z"], variants:["M4 5h7v6H4z","M13 5h7v6h-7z","M4 13h7v6H4z","M13 13h7v6h-7z"],
+    material:["M12 3a9 9 0 1 0 0 18 4 4 0 0 0 0-8h4a5 5 0 0 0 5-5c0-5-4-9-9-9Z","M7 10h.01","M9 6h.01","M15 7h.01"],
+    train:["M4 18V8l8-5 8 5v10","M8 21v-7h8v7","M9 9h.01","M15 9h.01"], cube:["m12 2 9 5-9 5-9-5 9-5Z","M3 7v10l9 5 9-5V7","M12 12v10"],
+    compose:["M3 4h8v8H3z","M13 4h8v5h-8z","M13 11h8v9h-8z","M3 14h8v6H3z"], dataset:["M4 5c0-2 16-2 16 0s-16 2-16 0Z","M4 5v6c0 2 16 2 16 0V5","M4 11v6c0 2 16 2 16 0v-6"],
+    transform:["M5 7h11","m13 4 3 3-3 3","M19 17H8","m11 3-3-3 3-3","M5 13v7","M19 4v7"]
   };
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name].map((d, index) => <path d={d} key={index} />)}</svg>;
 }
@@ -73,7 +100,7 @@ const uiText: Record<string, Record<string, string>> = {
   pt:{new:"Nova geração",home:"Início",create:"Criar",library:"Biblioteca",presets:"Predefinições",workflows:"Fluxos de trabalho",models:"Modelos",loras:"LoRA",embeddings:"Incorporações",tools:"FERRAMENTAS",imagePrompt:"Imagem para prompt",enhance:"Melhorar imagem",imageImage:"Imagem para imagem",inpaint:"Retoque",face:"Estúdio facial",control:"Control Net",relight:"Reiluminar (IC-Light)",repair:"Estúdio de reparação",smart:"Edição inteligente (JoyAI)",settings:"Definições",appearance:"Aparência",textSize:"Tamanho do texto",displaySize:"Tamanho do ecrã",language:"Idioma",typeface:"Tipo de letra",bold:"Texto em negrito"},
   it:{new:"Nuova generazione",home:"Home",create:"Crea",library:"Libreria",presets:"Preimpostazioni",workflows:"Flussi di lavoro",models:"Modelli",loras:"LoRA",embeddings:"Incorporamenti",tools:"STRUMENTI",imagePrompt:"Immagine in prompt",enhance:"Migliora immagine",imageImage:"Immagine in immagine",inpaint:"Inpainting",face:"Studio volto",control:"Control Net",relight:"Riillumina (IC-Light)",repair:"Studio riparazione",smart:"Modifica intelligente (JoyAI)",settings:"Impostazioni",appearance:"Aspetto",textSize:"Dimensione testo",displaySize:"Dimensione schermo",language:"Lingua",typeface:"Carattere",bold:"Testo in grassetto"},
   es:{new:"Nueva generación",home:"Inicio",create:"Crear",library:"Biblioteca",presets:"Preajustes",workflows:"Flujos de trabajo",models:"Modelos",loras:"LoRA",embeddings:"Incrustaciones",tools:"HERRAMIENTAS",imagePrompt:"Imagen a prompt",enhance:"Mejorar imagen",imageImage:"Imagen a imagen",inpaint:"Relleno",face:"Estudio facial",control:"Control Net",relight:"Reiluminar (IC-Light)",repair:"Estudio de reparación",smart:"Edición inteligente (JoyAI)",settings:"Ajustes",appearance:"Apariencia",textSize:"Tamaño del texto",displaySize:"Tamaño de pantalla",language:"Idioma",typeface:"Tipografía",bold:"Texto en negrita"},
-  fr:{new:"Nouvelle génération",home:"Accueil",create:"Créer",library:"Bibliothèque",presets:"Préréglages",workflows:"Flux de travail",models:"Modèles",loras:"LoRA",embeddings:"Intégrations",tools:"OUTILS",imagePrompt:"Image vers prompt",enhance:"Améliorer l’image",imageImage:"Image vers image",inpaint:"Inpainting",face:"Studio visage",control:"Control Net",relight:"Rééclairer (IC-Light)",repair:"Studio de réparation",smart:"Édition intelligente (JoyAI)",settings:"Paramètres",appearance:"Apparence",textSize:"Taille du texte",displaySize:"Taille d’affichage",language:"Langue",typeface:"Police",bold:"Texte en gras"},
+  fr:{new:"Nouvelle génération",home:"Accueil",create:"Créer",library:"Bibliothèque",presets:"Préréglages",workflows:"Flux de travail",models:"Modèles",loras:"LoRA",embeddings:"Intégrations",tools:"OUTILS",imagePrompt:"Image vers prompt",enhance:"Améliorer l'image",imageImage:"Image vers image",inpaint:"Inpainting",face:"Studio visage",control:"Control Net",relight:"Rééclairer (IC-Light)",repair:"Studio de réparation",smart:"Édition intelligente (JoyAI)",settings:"Paramètres",appearance:"Apparence",textSize:"Taille du texte",displaySize:"Taille d'affichage",language:"Langue",typeface:"Police",bold:"Texte en gras"},
   de:{new:"Neue Generierung",home:"Start",create:"Erstellen",library:"Bibliothek",presets:"Voreinstellungen",workflows:"Arbeitsabläufe",models:"Modelle",loras:"LoRA",embeddings:"Einbettungen",tools:"WERKZEUGE",imagePrompt:"Bild zu Prompt",enhance:"Bild verbessern",imageImage:"Bild zu Bild",inpaint:"Inpainting",face:"Gesichtsstudio",control:"Control Net",relight:"Neu beleuchten (IC-Light)",repair:"Reparaturstudio",smart:"Intelligente Bearbeitung (JoyAI)",settings:"Einstellungen",appearance:"Darstellung",textSize:"Textgröße",displaySize:"Anzeigegröße",language:"Sprache",typeface:"Schriftart",bold:"Fetter Text"}
 };
 
@@ -93,6 +120,7 @@ const trainingShotOptions: Record<string, string[][]> = {
   Style: [["Portrait","portrait composition demonstrating the style"],["Full Body","full-body subject demonstrating the style"],["Architecture","architectural scene demonstrating the style"],["Landscape","natural landscape demonstrating the style"],["Interior","detailed interior demonstrating the style"],["Object","single-object study demonstrating the style"],["Action","dynamic action composition demonstrating the style"],["Lighting","dramatic lighting study demonstrating the style"]],
 };
 const promptCardLibrary: Record<string,{label:string;options:{name:string;prompt:string}[]}> = {
+  Treatment:{label:"Visual Treatment",options:[{name:"DepthStage",prompt:"three-depth visual transition: foreground 100% photographic realism, middle 75% realism and 25% manga, distant background 35% realism and 65% manga, gradual distance-based transition, one continuous perspective and lighting system, realistic foreground people and materials, manga influence increases only with distance, theatrical depth staging, no panels or split screen"}]},
   Subject:{label:"Subject",options:[{name:"Warrior",prompt:"formidable heroic warrior with coherent equipment and identity"},{name:"Furniture",prompt:"professionally designed furniture with realistic construction"},{name:"Architecture",prompt:"coherent architectural subject with structurally believable details"},{name:"Creature",prompt:"distinct fantasy creature with consistent anatomy and markings"},{name:"Portrait",prompt:"single identifiable portrait subject with stable facial identity"}]},
   Material:{label:"Material",options:[{name:"Aged Bronze",prompt:"aged bronze with natural verdigris and worn polished edges"},{name:"Black Steel",prompt:"dark forged steel with subtle wear and realistic reflections"},{name:"Mahogany",prompt:"polished mahogany with deep warm natural grain"},{name:"Marble",prompt:"white marble with subtle grey mineral veining"},{name:"Leather",prompt:"weathered leather with natural creases and stitching"}]},
   Pose:{label:"Pose",options:[{name:"Neutral",prompt:"balanced neutral presentation pose"},{name:"Defensive",prompt:"controlled defensive stance with believable weight"},{name:"Action",prompt:"dynamic action pose with correct anatomy and physical balance"},{name:"Seated",prompt:"natural seated pose with clear silhouette"},{name:"In Use",prompt:"shown naturally in practical use"}]},
@@ -100,8 +128,14 @@ const promptCardLibrary: Record<string,{label:string;options:{name:string;prompt
   Lighting:{label:"Lighting",options:[{name:"Cinematic",prompt:"cinematic directional lighting with controlled contrast"},{name:"Golden Hour",prompt:"warm golden-hour light with long soft shadows"},{name:"Moonlight",prompt:"cool moonlight with subtle rim lighting"},{name:"Torchlight",prompt:"warm flickering torchlight with realistic falloff"},{name:"Product",prompt:"soft professional product lighting revealing material detail"}]},
   Camera:{label:"Camera",options:[{name:"Full View",prompt:"complete subject visible in frame"},{name:"Low Angle",prompt:"slight low-angle camera with a powerful perspective"},{name:"Close Detail",prompt:"macro close detail with shallow depth of field"},{name:"Three-quarter",prompt:"three-quarter camera view showing depth and construction"},{name:"Wide",prompt:"wide contextual composition with foreground-to-background depth"}]}
 };
+const DEPTH_STAGE_PROMPT="three-depth visual transition: foreground 100% photographic realism, middle 75% realism and 25% manga, distant background 35% realism and 65% manga, gradual distance-based transition, one continuous perspective and lighting system, realistic foreground people and materials, manga influence increases only with distance, theatrical depth staging, no panels or split screen";
+const expandPromptWildcards=(value:string)=>value.replace(/\bDepthStage\b/gi,DEPTH_STAGE_PROMPT);
 const datasetPoseOptions = [["Front","full-body front view, neutral pose, complete subject visible"],["Three-quarter","three-quarter view, natural balanced pose"],["Profile","clean side profile, full subject visible"],["Back","rear view, design and silhouette clearly visible"],["Action","dynamic but anatomically correct action pose"],["Seated","natural seated pose with hands visible"],["Portrait","head-and-shoulders portrait with consistent identity"],["Environment","wide environmental view with complete subject visible"]] as const;
 const artStyleOptions = [
+  [
+    "DepthStage",
+    "three-depth visual transition: foreground 100% photographic realism, middle 75% realism and 25% manga, distant background 35% realism and 65% manga, gradual distance-based transition, one continuous perspective and lighting system, realistic foreground people and materials, manga influence increases only with distance, theatrical depth staging, no panels or split screen",
+  ],
   [
     "Photoreal",
     "photorealistic, natural light, realistic skin, lifelike detail",
@@ -109,6 +143,10 @@ const artStyleOptions = [
   [
     "Cinematic",
     "cinematic lighting, film still, dramatic composition, color grading",
+  ],
+  [
+    "Jellybean Bright Cartoon",
+    "bright premium 3D cartoon illustration, playful rounded forms and a clean readable silhouette, cheerful saturated candy palette, glossy jellybean surfaces with crisp individual pieces, very bright high-key daytime illumination, clear blue-sky daylight plus a large soft frontal key light, strong white bounce fill from the front and both sides, open luminous exposure, lifted midtones and fully readable shadow detail, soft short contact shadows only, balanced global illumination, clean whites, vivid colors protected from clipping, colorful polished family-animation finish, brighter than ordinary daylight photography, no dusk, no night lighting, no dramatic chiaroscuro, no dark corners, no crushed blacks, no heavy vignette, no muddy colors, no underexposure, no photoreal skin",
   ],
   [
     "High Renaissance",
@@ -150,14 +188,502 @@ const artStyleOptions = [
     "Hokusai Influence",
     "Japanese woodblock composition, bold contour, flat color",
   ],
+  [
+    "Botticelli Influence",
+    "graceful Early Renaissance figures, flowing lyrical contours, delicate faces, pale luminous color, decorative fabric movement, balanced mythic composition, soft tempera finish",
+  ],
+  [
+    "Titian Influence",
+    "Venetian Renaissance richness, glowing layered color, warm flesh tones, confident painterly fabric, atmospheric depth, dignified composition and golden illumination",
+  ],
+  [
+    "Turner Influence",
+    "luminous Romantic atmosphere, radiant mist, sweeping light, expressive skies, dissolving edges, glowing warm and cool color transitions, dramatic environmental scale",
+  ],
+  [
+    "Goya Influence",
+    "bold Spanish Romantic painting, earthy restrained palette, incisive character, dramatic grouping, expressive brushwork and unsettling theatrical illumination",
+  ],
+  [
+    "Klimt Influence",
+    "ornamental symbolism, luminous gold pattern, elegant flattened shapes, jewel-like mosaic details, decorative geometry and richly designed negative space",
+  ],
+  [
+    "Mucha Influence",
+    "elegant Art Nouveau poster design, graceful contour drawing, botanical frames, harmonious pastel color, decorative halos, flowing fabric and refined lithographic finish",
+  ],
+  [
+    "Gustave Dore Influence",
+    "monumental engraved fantasy illustration, intricate cross-hatching, vast architectural scale, theatrical beams of light, deep atmospheric perspective and dramatic storytelling",
+  ],
+  [
+    "Arthur Rackham Influence",
+    "enchanted storybook illustration, expressive ink contours, delicate watercolor washes, twisted organic forms, muted woodland palette and intricate whimsical detail",
+  ],
+  [
+    "Hieronymus Bosch Influence",
+    "densely populated allegorical fantasy, strange imaginative creatures, miniature narrative incidents, clear spatial staging and meticulous early Netherlandish painted detail",
+  ],
+  [
+    "Bruegel Influence",
+    "panoramic narrative composition, lively groups of small figures, seasonal landscape detail, earthy color, clear visual storytelling and convincing environmental depth",
+  ],
+  [
+    "Kandinsky Influence",
+    "energetic abstract composition, rhythmic geometry, expressive lines, musical color relationships, floating shapes and deliberate visual balance",
+  ],
+  [
+    "Escher Influence",
+    "precise monochrome architectural drawing, impossible geometry, recursive structure, interlocking positive and negative space, meticulous engraved shading and mathematical clarity",
+  ],
+  [
+    "Hiroshige Influence",
+    "Japanese ukiyo-e landscape, elegant cropped composition, lyrical weather, layered blue distance, delicate travelers and architecture, flat printed color and serene seasonal atmosphere",
+  ],
+  [
+    "Kuniyoshi Influence",
+    "dynamic Japanese warrior print, powerful diagonals, expressive heroic anatomy, elaborate textiles, supernatural creatures, bold contour and energetic ukiyo-e color",
+  ],
+  [
+    "Yoshitoshi Influence",
+    "late ukiyo-e dramatic storytelling, refined expressive faces, tense gesture, intricate costume, moonlit atmosphere, clean carved contours and sophisticated restrained color",
+  ],
+  [
+    "Sesshu Toyo Influence",
+    "Japanese monochrome ink landscape, disciplined brush economy, mist-filled negative space, angular mountain rhythm, quiet depth and expressive sumi-e texture",
+  ],
+  [
+    "Ito Jakuchu Influence",
+    "meticulous Japanese nature painting, brilliantly observed birds and plants, decorative density, precise feathers and scales, luminous mineral color and bold graphic arrangement",
+  ],
+  [
+    "Ogata Korin Influence",
+    "Rinpa-school elegance, simplified natural motifs, rhythmic curves, gold-leaf space, flat luxurious color, decorative screens and refined asymmetrical composition",
+  ],
+  [
+    "Uemura Shoen Influence",
+    "refined Japanese figure painting, graceful posture, delicate facial expression, elegant kimono pattern, controlled line, quiet color and dignified luminous presentation",
+  ],
+  [
+    "Takehisa Yumeji Influence",
+    "romantic Taisho-era illustration, slender expressive figures, lyrical contour, muted vintage color, decorative textile pattern and wistful poster-like composition",
+  ],
+  [
+    "Osamu Tezuka Influence",
+    "foundational cinematic manga language, clear appealing character silhouettes, large expressive eyes, economical ink lines, lively staging and readable sequential-action energy",
+  ],
+  [
+    "Shotaro Ishinomori Influence",
+    "classic action manga, sleek masked hero design, kinetic speed lines, strong black-and-white contrast, dramatic transformations and clean mechanical costume detail",
+  ],
+  [
+    "Leiji Matsumoto Influence",
+    "romantic space-opera manga, elegant elongated figures, ornate spacecraft, deep star fields, melancholic atmosphere, intricate machinery and sweeping cosmic composition",
+  ],
+  [
+    "Classic Shonen Manga",
+    "high-energy black-and-white shonen manga, confident ink anatomy, explosive action posing, strong foreshortening, bold speed lines, impact frames and perfectly readable silhouettes",
+  ],
+  [
+    "Elegant Shojo Manga",
+    "delicate shojo manga illustration, graceful anatomy, expressive sparkling eyes, flowing hair and fabric, floral screen-tone motifs, fine linework and romantic luminous composition",
+  ],
+  [
+    "Cinematic Seinen Manga",
+    "mature cinematic manga, realistic anatomy, controlled expressive acting, detailed environments, sophisticated panel-like framing, textured ink shadows and restrained dramatic tone",
+  ],
+  [
+    "Technical Mecha Manga",
+    "highly engineered mecha manga design, mechanically plausible joints, layered armor panels, exposed actuators, precise linework, readable scale cues and dynamic launch-bay presentation",
+  ],
+  [
+    "Retro Manga Print",
+    "1960s to 1980s Japanese manga print aesthetic, bold nib lines, hand-cut screen tones, limited spot color, vintage paper texture and energetic editorial composition",
+  ],
+  [
+    "Akira Toriyama Influence",
+    "joyful adventure manga, exceptionally clear rounded silhouettes, lively facial acting, compact mechanical inventions, confident clean ink contours, playful anatomy and bright readable color",
+  ],
+  [
+    "Kentaro Miura Influence",
+    "epic dark-fantasy manga, monumental architecture, intricately rendered armour and creatures, powerful human anatomy, dense cross-hatching, sweeping battle scale and tragic atmospheric weight",
+  ],
+  [
+    "Shigeru Mizuki Influence",
+    "folkloric yokai manga, charming simplified characters against richly textured natural backgrounds, mysterious spirits, traditional Japanese atmosphere, crisp black ink and playful supernatural storytelling",
+  ],
+  [
+    "Kazuo Umezz Influence",
+    "intense psychological horror manga, extreme expressive faces, stark black-and-white contrast, trembling line energy, claustrophobic framing and escalating surreal unease",
+  ],
+  [
+    "Monkey Punch Influence",
+    "stylish caper manga, lanky elastic figures, sharp fashion silhouettes, jazzy movement, witty facial acting, economical inkwork and chic retro international settings",
+  ],
+  [
+    "Jiro Taniguchi Influence",
+    "quiet observational manga realism, natural human proportions, precise architecture and landscapes, restrained expressions, delicate ink textures, patient composition and contemplative everyday atmosphere",
+  ],
+  [
+    "Wild Adventure Cel Manga",
+    "wild adventure-manga close-up, huge readable expression, elastic facial anatomy, thick energetic ink contours, angular costume shapes, warm hand-painted cel color, simple two-tone shadows, fiery background and exuberant comic intensity",
+  ],
+  [
+    "Elastic Comedy Action",
+    "high-energy comedy-action manga, dramatically stretched expressions, popping eyes and clenched teeth, loose kinetic posing, bold contour variation, graphic impact lines and saturated cel-animation color",
+  ],
+  [
+    "Nineties Adventure Anime",
+    "1990s hand-painted adventure anime frame, strong black outlines, warm analog cel color, simplified shadow shapes, expressive character acting, painted atmospheric background and subtle film grain",
+  ],
+  [
+    "Neo-Tokyo Mechanical Manga",
+    "cinematic urban science-fiction manga, meticulous motorcycles and machinery, grounded anatomy, explosive perspective, dense city infrastructure, precise ink rendering and dramatic widescreen momentum",
+  ],
+  [
+    "Fashion-Forward Battle Manga",
+    "theatrical battle manga with sculptural fashion poses, elongated anatomy, ornate clothing, graphic sound-effect energy, bold patterned shadows, jewel-like color and surreal visual symbolism",
+  ],
+  [
+    "Painterly Samurai Manga",
+    "expressive samurai manga, loose calligraphic brushwork, anatomically grounded movement, weathered faces, quiet negative space, ink-wash atmosphere and sudden bursts of precise action detail",
+  ],
+  [
+    "Fan Kuan Influence",
+    "monumental Northern Song landscape, towering mountains above tiny travelers, intricate textured rock strokes, misty spatial layers and profound natural scale",
+  ],
+  [
+    "Guo Xi Influence",
+    "Northern Song shan shui painting, multiple-distance landscape structure, mist-veiled mountains, twisted winter trees, controlled ink texture and deep wandering perspective",
+  ],
+  [
+    "Ma Yuan Influence",
+    "Southern Song poetic landscape, one-corner composition, spacious atmospheric emptiness, sharply observed foreground branches, distant mist and restrained ink-and-wash elegance",
+  ],
+  [
+    "Zhang Zeduan Influence",
+    "meticulous Chinese handscroll panorama, bustling everyday life, precise architecture and engineering, hundreds of readable narrative details and continuous spatial storytelling",
+  ],
+  [
+    "Bada Shanren Influence",
+    "bold literati ink painting, eccentric birds and fish, sparse calligraphic brushwork, powerful negative space, dry-wet ink contrast and enigmatic emotional character",
+  ],
+  [
+    "Qi Baishi Influence",
+    "lively Chinese ink-and-color painting, spontaneous calligraphic brushwork, expressive small animals and plants, vivid mineral accents and joyful economical composition",
+  ],
+  [
+    "Xu Beihong Influence",
+    "dynamic Chinese ink realism, powerful horses and figures, anatomical confidence, energetic brush rhythm, strong tonal modeling and disciplined empty space",
+  ],
+  [
+    "Wu Guanzhong Influence",
+    "modern Chinese lyrical landscape, black calligraphic structure, white architectural rhythm, bright restrained color accents and elegant fusion of ink tradition with abstraction",
+  ],
+  [
+    "Chinese Gongbi Painting",
+    "meticulous gongbi technique, extremely fine controlled outlines, layered mineral pigments, elegant figures or nature, decorative precision and luminous silk-painting finish",
+  ],
+  [
+    "Chinese Ink Animation",
+    "poetic Chinese ink-wash animation, fluid brush silhouettes, watercolor diffusion, breathing negative space, graceful motion design and atmospheric mountain-and-water depth",
+  ],
+  [
+    "Wuxia Manhua",
+    "dynamic Chinese wuxia comic art, elegant martial-arts movement, sweeping robes, expressive ink contours, cinematic mountain scenery, qi energy effects and dramatic vertical composition",
+  ],
+  [
+    "Chinese Fantasy Manhua",
+    "polished full-color fantasy manhua, intricate historical costume, luminous magical effects, elegant faces, layered palace or mountain environments and vivid cinematic color",
+  ],
   ["Fantasy", "epic fantasy art, ethereal atmosphere, intricate worldbuilding"],
   [
     "Dark Fantasy",
     "dark fantasy, Gothic grandeur, ominous atmosphere, dramatic detail",
   ],
   [
+    "Teal-Gold Biomechanical Baroque",
+    "cinematic biomechanical dark-fantasy portrait, massive ceremonial armour built from layered organic metal plates, ornate Baroque gold filigree and circular medallions, hammered oxidized teal-blue bronze, blackened steel recesses, delicate gold edge trim, subtle engraved relief, turquoise patina, warm molten-orange reflections glowing between armour seams, cold cyan ambient haze, volcanic ruin background, sharp tactile metal texture, shallow depth of field, dramatic three-quarter close-up, premium high-detail concept rendering, no ordinary medieval armour, no clean plastic, no flat lighting",
+  ],
+  [
+    "Volcanic Relic Armour",
+    "ancient supernatural relic armour, heavily layered engraved metal, dark steel and weathered blue-green copper patina, elaborate gold scrollwork, round ceremonial emblems, internal ember glow, orange fire behind the subject, cool smoke-filled environment, high contrast cinematic rim light, realistic hammered surfaces and worn edges, imposing portrait composition",
+  ],
+  [
+    "Eldritch Filigree Mecha",
+    "eldritch mechanical guardian combining alien organic machinery with ceremonial filigree armour, ribbed biomechanical joints, curling engraved plates, teal oxidized metal, aged gold inlay, luminous amber eyes and energy leaking through narrow seams, intricate handcrafted surface relief, dark monumental environment and cinematic atmospheric lighting",
+  ],
+  [
+    "Ornamental Dark-Fantasy Cinema",
+    "luxurious dark-fantasy film concept art, monumental masked warrior, lavish sculpted armour, layered arabesque ornament and embossed medallions, tarnished teal metal with warm gold accents, cold smoky shadows balanced by intense orange firelight, crisp foreground detail, soft cinematic background separation and powerful restrained composition",
+  ],
+  [
+    "Patinated Bronze Guardian",
+    "close cinematic portrait of an ancient armoured guardian, hammered bronze plates aged to deep turquoise verdigris, polished gold piping and rivets, black steel understructure, circular mechanical motifs, realistic oxidation variation, warm reflected firelight, cool daylight fill, shallow depth of field and museum-quality material detail",
+  ],
+  [
     "Concept Art",
     "professional concept art, matte painting, detailed production design",
+  ],
+  [
+    "Bright 3D Animation",
+    "premium stylized 3D animation, appealing rounded forms, expressive readable silhouettes, bright high-key lighting, clean global illumination, cheerful controlled palette, polished materials and crisp family-film detail",
+  ],
+  [
+    "Cinematic 3D Animation",
+    "high-end stylized 3D animated feature frame, expressive character design, cinematic staging, soft volumetric depth, physically believable materials, controlled contrast and polished production rendering",
+  ],
+  [
+    "Classic Cel Animation",
+    "traditional hand-painted cel animation, confident clean outlines, simplified shadow shapes, expressive posing, vivid flat color, painted background and clear frame-by-frame readability",
+  ],
+  [
+    "Modern Anime Film",
+    "polished animated-film illustration, precise linework, luminous color, atmospheric painted background, expressive natural posing, cinematic sky light and finely observed environmental detail",
+  ],
+  [
+    "European Graphic Novel",
+    "sophisticated European graphic-novel art, precise expressive ink line, carefully designed shapes, restrained cinematic color, architectural detail and mature visual storytelling",
+  ],
+  [
+    "Golden Age Comic",
+    "vintage comic-book illustration, bold ink contours, dynamic foreshortening, limited saturated printing palette, halftone texture, energetic panel composition and clear heroic storytelling",
+  ],
+  [
+    "Pulp Science Fiction",
+    "painted mid-century science-fiction cover, bold futuristic shapes, adventurous composition, saturated retro color, dramatic rim lighting, airbrushed atmosphere and tactile print texture",
+  ],
+  [
+    "Retro Futurism",
+    "optimistic retro-futurist design, streamlined machinery, atomic-age geometry, clean pastel and chrome palette, bright exhibition lighting and polished vintage advertising composition",
+  ],
+  [
+    "Storybook Gouache",
+    "charming storybook gouache illustration, opaque layered paint, softly simplified forms, warm handcrafted texture, gentle color harmony and clear narrative composition",
+  ],
+  [
+    "Cut Paper Illustration",
+    "layered cut-paper illustration, crisp handcrafted silhouettes, visible paper fibers, dimensional stacked edges, soft cast shadows, balanced graphic color and tactile collage construction",
+  ],
+  [
+    "Stop Motion Miniature",
+    "meticulously crafted stop-motion miniature scene, handmade puppets and props, tactile materials, tiny construction details, soft practical lighting, shallow depth of field and believable physical scale",
+  ],
+  [
+    "Clay Animation",
+    "playful clay-animation aesthetic, hand-shaped forms, subtle fingerprints and sculpting marks, saturated color, soft studio illumination, friendly expressive faces and tactile miniature sets",
+  ],
+  [
+    "Designer Toy",
+    "premium collectible designer-toy styling, simplified iconic proportions, smooth molded surfaces, carefully controlled color blocking, soft product lighting and clean presentation",
+  ],
+  [
+    "Isometric Game Art",
+    "high-detail isometric game environment, readable modular forms, consistent three-quarter top-down camera, controlled scale, crisp material separation, bright ambient lighting and polished asset design",
+  ],
+  [
+    "Architectural Visualization",
+    "premium architectural visualization, physically accurate materials, elegant daylight, balanced interior and exterior exposure, realistic global illumination, disciplined composition and refined presentation",
+  ],
+  [
+    "Product Illustration",
+    "high-end commercial product illustration, precise form, clean white-card lighting, controlled reflections, crisp edges, accurate material separation, bright polished color and uncluttered composition",
+  ],
+  [
+    "Raymond Loewy Influence",
+    "streamlined industrial design, elegant aerodynamic casing, softened geometric transitions, efficient visual hierarchy, optimistic machine-age color and polished commercial presentation",
+  ],
+  [
+    "Henry Dreyfuss Influence",
+    "human-centered industrial design, ergonomic proportions, legible controls, honest functional construction, practical materials and restrained professional styling",
+  ],
+  [
+    "Norman Bel Geddes Influence",
+    "theatrical machine-age futurism, sweeping aerodynamic volumes, monumental transportation forms, dramatic exhibition staging and optimistic streamlined spectacle",
+  ],
+  [
+    "Buckminster Fuller Influence",
+    "lightweight systems design, geodesic geometry, structural efficiency, modular components, tensegrity logic and visionary resource-conscious engineering",
+  ],
+  [
+    "Eames Influence",
+    "warm modern industrial design, molded plywood and fiberglass logic, friendly ergonomic curves, economical construction, playful functionality and refined mid-century presentation",
+  ],
+  [
+    "Eero Saarinen Influence",
+    "sculptural mid-century modernism, continuous sweeping silhouettes, elegant pedestal structures, clean spatial flow and refined material unity",
+  ],
+  [
+    "Verner Panton Influence",
+    "bold space-age interiors, flowing molded forms, immersive saturated color, repeating geometric patterns and playful futuristic furniture design",
+  ],
+  [
+    "Joe Colombo Influence",
+    "modular 1960s futurism, compact multifunctional living systems, rounded plastic shells, integrated controls and vivid space-age color blocking",
+  ],
+  [
+    "Ettore Sottsass Influence",
+    "radical postmodern product design, stacked geometric volumes, expressive laminate patterns, unexpected color combinations and playful anti-minimalist character",
+  ],
+  [
+    "Achille Castiglioni Influence",
+    "ingenious Italian product design, witty functional transformation, exposed construction logic, economical components and elegant visual balance",
+  ],
+  [
+    "Carlo Scarpa Influence",
+    "meticulous architectural detailing, layered material junctions, crafted brass stone wood and concrete, precise reveals, poetic thresholds and museum-like light",
+  ],
+  [
+    "Frank Lloyd Wright Influence",
+    "organic architecture, strong horizontal geometry, integrated furniture, warm natural materials, geometric ornament and seamless connection between interior and landscape",
+  ],
+  [
+    "Gaudi Influence",
+    "organic architectural structure, flowing stone and ceramic surfaces, biomorphic columns, colorful mosaic craft, nature-derived geometry and fantastical structural detail",
+  ],
+  [
+    "Le Corbusier Influence",
+    "machine-age modern architecture, pure geometric volumes, pilotis, ribbon windows, modular proportions, raw concrete and disciplined spatial composition",
+  ],
+  [
+    "Zaha Hadid Influence",
+    "dynamic parametric architecture, sweeping fluid geometry, sharp directional flow, continuous futuristic surfaces and dramatic sculptural spatial movement",
+  ],
+  [
+    "Syd Mead Influence",
+    "highly resolved industrial futurism, believable advanced vehicles and environments, sleek layered machinery, luminous marker-rendered surfaces, cinematic scale and optimistic technological storytelling",
+  ],
+  [
+    "Ron Cobb Influence",
+    "functional science-fiction industrial design, rugged believable machinery, practical engineering details, readable mechanisms, utilitarian materials and grounded cinematic worldbuilding",
+  ],
+  [
+    "H. R. Giger Influence",
+    "dark biomechanical design, fused organic and mechanical anatomy, ribbed tubular structures, monochrome airbrushed depth and unsettling industrial elegance",
+  ],
+  [
+    "Beksinski Influence",
+    "nightmarish fantastic realism, eroded monumental figures, decayed organic architecture, dreamlike desolation, smoke and ash atmosphere, restrained mineral color, uncanny silence and meticulously smooth painterly detail",
+  ],
+  [
+    "Piranesi Influence",
+    "vast invented architectural ruins, oppressive arches and mechanical structures, dramatic low viewpoint, labyrinthine depth, tiny scale cues, dense etched ornament and atmospheric monumental shadow",
+  ],
+  [
+    "John Martin Influence",
+    "apocalyptic Romantic spectacle, colossal ruined architecture, tiny figures against overwhelming scale, volcanic fire, storm-filled heavens, glowing distance and theatrical sublime illumination",
+  ],
+  [
+    "Gustave Moreau Influence",
+    "symbolist fantasy painting, jewel-like ceremonial ornament, densely decorated armour and fabric, mysterious mythic figure, glowing precious-metal accents, dark saturated color and intricate dreamlike detail",
+  ],
+  [
+    "Moebius Influence",
+    "imaginative science-fiction design, elegant precise linework, airy surreal environments, inventive machinery, clean color fields and expansive visual storytelling",
+  ],
+  [
+    "Frazetta Influence",
+    "muscular heroic fantasy, sweeping action, powerful readable silhouettes, dramatic anatomy, monsters and warriors, storm-filled distance, earthy saturated oil color and vigorous painterly brushwork",
+  ],
+  [
+    "Sculptural Yokai Armour",
+    "museum-quality Japanese creature maquette, folklore-inspired anatomy, asymmetrical layered armour, carved bone chitin and aged metal, articulated joints, practical sculptural construction and dense handcrafted surface detail",
+  ],
+  [
+    "Ancient Yokai War Construct",
+    "original Japanese folklore-inspired war construct, powerful crouched silhouette, layered ceremonial armour fused with creature anatomy, horn bone lacquered iron and braided cord, asymmetrical mask, exposed articulated mechanisms, centuries of wear, museum maquette realism and dramatic shrine lighting",
+  ],
+  [
+    "Cyber-Organic Ritual Relic",
+    "original ritual relic combining anatomy and machinery, interlocking shell plates, tendons cables and carved mechanical joints, sacred geometric ornament, oxidized bronze black iron bone and aged lacquer, intricate sculptural depth, practical-effects craftsmanship and dark neutral presentation",
+  ],
+  [
+    "Creature Sculpture Maquette",
+    "high-end practical creature-design maquette, believable skeletal and muscular construction, layered skin folds and armour plates, individually sculpted claws teeth horns and joints, subtle asymmetry, resin clay and painted-metal material realism, turntable product lighting and sharp reference detail",
+  ],
+  [
+    "Ritual Armour Transformation",
+    "transform the subject into an original ceremonial guardian while preserving its recognizable silhouette, anatomy and pose; add layered organic armour, carved masks, horn and bone accents, lacquered plates, braided bindings, articulated mechanical detail, restrained ancient patina and handcrafted sculptural realism",
+  ],
+  [
+    "Ethereal Ink Fantasy",
+    "elongated elegant fantasy figures, delicate sweeping ink lines, pale translucent watercolor, flowing costume and hair, jewel-like accents, lyrical movement and generous luminous negative space",
+  ],
+  [
+    "Celestial Ornamental Beings",
+    "monumental surreal celestial entity, symbolic transformed anatomy, halo-like sacred geometry, flowing ornamental limbs, luminous restrained color, vast atmospheric space and solemn otherworldly presence",
+  ],
+  [
+    "Gothic Painterly Antihero",
+    "formidable dark-fantasy antihero, weathered leather and steel, grounded muscular anatomy, earthy desaturated palette, confrontational pose, smoky directional light and tactile traditional-paint texture",
+  ],
+  [
+    "Alien Naturalist Speculative",
+    "biologically plausible alien species, coherent evolutionary anatomy, ecological adaptation, field-guide observation, unfamiliar functional structures, atmospheric extraterrestrial habitat and precise natural-history detail",
+  ],
+  [
+    "Luminous Epic Cover Art",
+    "heroic science-fiction and fantasy cover composition, crystal-clear silhouette, precise representational detail, jewel-toned color, radiant cosmic landscape, grand narrative scale and uplifting cinematic light",
+  ],
+  [
+    "Mythic Medieval Concept",
+    "historically grounded medieval fantasy, believable arms and architecture, rugged northern landscape, weathered stone and iron, heroic scale, strong silhouette and practical cinematic concept detail",
+  ],
+  [
+    "Watercolor Legendary Realms",
+    "lyrical watercolor fantasy, mist-covered ancient landscape, delicate pencil structure, subtle earth palette, weathered ruins, quiet mythic figures, soft edges and melancholy natural atmosphere",
+  ],
+  [
+    "Nordic Surreal 3D Fantasy",
+    "surreal symbolic 3D fantasy, polished sculptural forms, deep tonal contrast, luminous darkness, dreamlike historical and science-fiction fusion, intricate ornamental detail and cinematic digital rendering",
+  ],
+  [
+    "Procedural Organic Structures",
+    "parametric organic structure, mathematically coherent repeated geometry, branching and cellular growth, node-designed surface variation, precise architectural visualization, intricate 3D materials and controlled generative complexity",
+  ],
+  [
+    "Ralph McQuarrie Influence",
+    "classic cinematic concept design, iconic readable silhouettes, large-scale science-fiction environments, atmospheric painted light and practical production-ready visual storytelling",
+  ],
+  [
+    "Ken Adam Influence",
+    "monumental cinematic production design, dramatic angular architecture, vast villainous interiors, bold structural rhythm, luxurious materials and theatrical perspective",
+  ],
+  [
+    "Harley Earl Influence",
+    "dramatic American automotive styling, long flowing body lines, chrome detailing, tailfin-era optimism, sculpted fenders and polished showroom presentation",
+  ],
+  [
+    "Virgil Exner Influence",
+    "forward-look transportation design, energetic wedge and fin forms, expressive chrome geometry, low planted stance and flamboyant mid-century automotive proportion",
+  ],
+  [
+    "William Morris Influence",
+    "Arts and Crafts design, honest handmade construction, dense botanical pattern, natural dyes, carved wood detail and harmonious integration of ornament and function",
+  ],
+  [
+    "Bauhaus Industrial",
+    "Bauhaus functional design, primary geometry, tubular steel, glass and honest materials, disciplined grid, minimal ornament and clear relationship between form and use",
+  ],
+  [
+    "Streamline Moderne",
+    "1930s streamlined industrial styling, rounded corners, horizontal speed lines, smooth enamel and chrome surfaces, aerodynamic housings and optimistic machine-age presentation",
+  ],
+  [
+    "Brutalist Industrial",
+    "monumental utilitarian design, exposed concrete and dark steel, oversized structural joints, severe block geometry, honest construction and controlled dramatic light",
+  ],
+  [
+    "Biomorphic Industrial",
+    "nature-derived industrial design, smooth shell structures, flowing ergonomic transitions, cellular patterns, lightweight organic engineering and tactile advanced materials",
+  ],
+  [
+    "Japanese Metabolism",
+    "modular megastructure design, replaceable capsule units, exposed circulation, bold concrete infrastructure, dense vertical systems and optimistic urban futurism",
+  ],
+  [
+    "Constructivist Machine Art",
+    "dynamic industrial geometry, diagonal structural rhythm, bold red black and cream graphics, exposed machine components and forceful engineered composition",
   ],
   [
     "Surrealism",
@@ -185,6 +711,62 @@ const artStyleOptions = [
     "carved marble sculpture, museum lighting, classical form",
   ],
   ["Bronze Monument", "patinated bronze, heroic scale, monumental sculpture"],
+  [
+    "Woven Narrative Tapestry",
+    "entire scene translated into a handwoven narrative tapestry, visible wool and silk threads, flattened medieval perspective, decorative borders, densely arranged figures and landscape motifs, rich natural-dye color, tactile textile relief and museum-preserved craftsmanship",
+  ],
+  [
+    "ChronicleWeave Tapestry",
+    "ChronicleWeave, the entire subject and environment physically reconstructed as a real historical woven tapestry made from wool and silk over cotton warp, unmistakable interlaced warp and weft across the face clothing hands and background, raised wool loops, silk thread highlights, natural-dye shading, textile seams, antique-gold woven accents, tactile fibre relief photographed in directional museum light; no photographic skin and no painted surface",
+  ],
+  [
+    "Millefleur Tapestry",
+    "late-medieval millefleur tapestry treatment, subject surrounded by hundreds of small flowering plants and symbolic animals, deep woven background, gold and jewel-toned threads, flattened elegant silhouettes and intricate handwoven texture",
+  ],
+  [
+    "Celestial Sky Tapestry",
+    "panoramic woven sky made from layered blue indigo silver and gold threads, stylized clouds, sun moon and constellations integrated as textile motifs, visible warp and weft, ornamental border and luminous handcrafted tapestry depth",
+  ],
+  [
+    "Carved Wood Sculpture",
+    "complete subject interpreted as masterfully carved hardwood sculpture, deep chisel marks, flowing natural grain following the form, layered undercuts, polished high points, darker recessed detail and warm museum lighting",
+  ],
+  [
+    "Polychrome Wood Carving",
+    "historic polychrome wood sculpture, hand-carved timber anatomy and drapery, aged painted pigments, worn gilded accents, visible grain and tool marks, small natural cracks and carefully restored museum presentation",
+  ],
+  [
+    "Carved Wooden Sky Relief",
+    "dramatic landscape and sky carved as a deep wooden bas-relief, sweeping layered clouds following the timber grain, carved rays and wind patterns, strong foreground-to-background depth, hand-tooled edges and warm directional light",
+  ],
+  [
+    "Marble Drapery Sculpture",
+    "monumental white marble sculpture with exceptionally delicate translucent-looking drapery, anatomically coherent carved form, crisp folds and undercuts, subtle grey mineral veins, softly polished highlights and classical gallery illumination",
+  ],
+  [
+    "Veined Marble Monument",
+    "large sculptural monument carved from richly veined marble, the natural mineral pattern deliberately aligned with anatomy and movement, powerful silhouette, precise chiselled detail, polished and honed surface contrast and architectural scale",
+  ],
+  [
+    "Marble Cloud Sculpture",
+    "surreal sky and rolling clouds transformed into layered carved marble, weightless vapor shapes rendered as solid stone, delicate translucent edges, deep undercut shadows, pale blue-grey veining and luminous celestial gallery light",
+  ],
+  [
+    "Stone Bas-Relief",
+    "complete scene carved into an architectural stone bas-relief, multiple shallow depth planes, crisp contour carving, weathered limestone texture, readable narrative composition, restrained mineral color and raking light revealing every carved layer",
+  ],
+  [
+    "Bronze and Marble Assemblage",
+    "museum-quality mixed sculpture combining warm patinated bronze figures and framework with cool carved marble forms, precise material boundaries, believable joins and weight, polished accents, oxidation in recesses and dramatic pedestal lighting",
+  ],
+  [
+    "Stone Mosaic Inlay",
+    "entire image constructed from precisely cut marble stone and glass tesserae, flowing mosaic contours, varied natural veining, gold accents, small visible joints, luminous color rhythm and monumental handcrafted wall-art presentation",
+  ],
+  [
+    "Stained Glass Sculpture",
+    "three-dimensional stained-glass sculpture assembled from jewel-toned translucent panels, dark metal leading defining every shape, layered glass depth, cast colored shadows, luminous sky light and cathedral-quality craftsmanship",
+  ],
 ] as const;
 const artStylePrompts: Record<string, string> =
   Object.fromEntries(artStyleOptions);
@@ -250,7 +832,19 @@ export default function Home() {
   const [modelQuery, setModelQuery] = useState("");
   const [loraQuery, setLoraQuery] = useState("");
   const [checkpoint, setCheckpoint] = useState("");
+  const [pinnedCheckpoints, setPinnedCheckpoints] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("froja-pinned-checkpoints") || "[]"); } catch { return []; }
+  });
+  const [pinnedCheckpointsLoaded, setPinnedCheckpointsLoaded] = useState(false);
   const [selectedLoras, setSelectedLoras] = useState<LoraChoice[]>([]);
+  const [pinnedLoras, setPinnedLoras] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("froja-pinned-loras") || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [pinnedLorasLoaded, setPinnedLorasLoaded] = useState(false);
   const [prompt, setPrompt] = useState(
     "A bronze archer priestess performing inside a circular temple arena, ornate columns, epic scale, ultra-detailed",
   );
@@ -258,6 +852,20 @@ export default function Home() {
     "blurry, low quality, deformed hands, extra fingers, watermark, text",
   );
   const [style, setStyle] = useState("Fantasy");
+  const [styleEnabled, setStyleEnabled] = useState(() =>
+    localStorage.getItem("froja-style-enabled") !== "false",
+  );
+  const [styleSearch, setStyleSearch] = useState("");
+  const filteredArtStyleOptions = useMemo(() => {
+    const query = styleSearch.trim().toLocaleLowerCase();
+    if (!query) return artStyleOptions;
+    return artStyleOptions.filter(([name, description]) =>
+      `${name} ${description}`.toLocaleLowerCase().includes(query),
+    );
+  }, [styleSearch]);
+  useEffect(() => {
+    localStorage.setItem("froja-style-enabled", String(styleEnabled));
+  }, [styleEnabled]);
   const [cameraProfile, setCameraProfile] = useState("none");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraYaw, setCameraYaw] = useState(0);
@@ -271,12 +879,26 @@ export default function Home() {
   const [height, setHeight] = useState(768);
   const [sampler, setSampler] = useState("euler");
   const [engine, setEngine] = useState("starting");
+  const [engineError, setEngineError] = useState("");
   const [counts, setCounts] = useState({ checkpoints: 0, loras: 0, vae: 0, embeddings: 0 });
   const [navPanel, setNavPanel] = useState<"home" | "library" | "presets" | "workflows" | "embeddings" | "settings" | "">("");
   const [embeddings, setEmbeddings] = useState<Model[]>([]);
   const [embeddingSearch, setEmbeddingSearch] = useState("");
   const [maintenanceState, setMaintenanceState] = useState("");
-  const [uiTheme, setUiTheme] = useState(() => localStorage.getItem("froja-theme") || "forge");
+  const [uiTheme, setUiTheme] = useState(() => {
+    // New look (Nov 2026): open once in Graphite LED; after that, whatever the user picks is remembered.
+    try { if (!localStorage.getItem("froja-ui-graphite-intro")) { localStorage.setItem("froja-ui-graphite-intro", "1"); return "graphite"; } } catch { /* ignore */ }
+    return localStorage.getItem("froja-theme") || "graphite";
+  });
+  const toggleSteelTheme = () => {
+    if (["stainless", "cyan-metal", "skyline", "graphite"].includes(uiTheme)) {
+      const previous = localStorage.getItem("froja-previous-theme") || "forge";
+      setUiTheme(["stainless", "cyan-metal", "skyline", "graphite"].includes(previous) ? "forge" : previous);
+    } else {
+      localStorage.setItem("froja-previous-theme", uiTheme);
+      setUiTheme("stainless");
+    }
+  };
   const [fontScale, setFontScale] = useState(() => Number(localStorage.getItem("froja-font-scale") || 110));
   const [textScale, setTextScale] = useState(() => Number(localStorage.getItem("froja-text-scale") || 110));
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem("froja-font-family") || "modern");
@@ -307,6 +929,7 @@ export default function Home() {
     x: number;
     y: number;
   } | null>(null);
+  const [contextCheckpoint, setContextCheckpoint] = useState<{ item: Model; x: number; y: number } | null>(null);
   const [error, setError] = useState("");
   const [modelOpen, setModelOpen] = useState(false);
   const [loraOpen, setLoraOpen] = useState(false);
@@ -337,8 +960,34 @@ export default function Home() {
   const [faceResult, setFaceResult] = useState("");
   const [faceState, setFaceState] = useState("Ready");
   const [faceRestore, setFaceRestore] = useState("codeformer-v0.1.0.pth");
+  const [faceSourceIndex, setFaceSourceIndex] = useState(0);
+  const [faceTargetIndex, setFaceTargetIndex] = useState(0);
+  const [faceVisibility, setFaceVisibility] = useState(0.85);
+  const [faceMode, setFaceMode] = useState<"exact" | "pose">("exact");
+  const [faceCount, setFaceCount] = useState(1);
+  const [faceMapping, setFaceMapping] = useState<"same" | "matched">("same");
+  const [transformOpen, setTransformOpen] = useState(false);
+  const [transformSource, setTransformSource] = useState("");
+  const [transformReference, setTransformReference] = useState("");
+  const [transformEnvironment, setTransformEnvironment] = useState("");
+  const [transformInstruction, setTransformInstruction] = useState("");
+  const [transformPreserve, setTransformPreserve] = useState("face identity, expression, camera framing, lighting, background and everything not explicitly requested to change");
+  const [transformModes, setTransformModes] = useState<string[]>([]);
+  const [transformTransparent, setTransformTransparent] = useState(false);
+  const [transformJob, setTransformJob] = useState("");
+  const [transformState, setTransformState] = useState("Ready");
+  const [transformResult, setTransformResult] = useState("");
+  const [deckOpen, setDeckOpen] = useState(false);
+  const [actualSize, setActualSize] = useState<{ w: number; h: number } | null>(null);
+  // Froja studios: "" = the studio slider (home); otherwise the studio you are inside.
+  const [station, setStation] = useState("");
+  const [createStep, setCreateStep] = useState(0);
+  const stationWindowWasOpen = useRef(false);
+  const [ledColor, setLedColor] = useState(() => { try { return localStorage.getItem("froja-led-color") || "blue"; } catch { return "blue"; } });
+  useEffect(() => { try { localStorage.setItem("froja-led-color", ledColor); } catch { /* ignore */ } }, [ledColor]);
+  const [, setAppearanceOpen] = useState(false);
   const [toolMode, setToolMode] = useState<
-    "img2img" | "inpaint" | "controlnet" | ""
+    "img2img" | "inpaint" | "controlnet" | "krea2-reference" | ""
   >("");
   const [toolSource, setToolSource] = useState("");
   const [toolMask, setToolMask] = useState("");
@@ -359,6 +1008,9 @@ export default function Home() {
   const [relightJob, setRelightJob] = useState("");
   const [relightResult, setRelightResult] = useState("");
   const [relightState, setRelightState] = useState("Ready");
+  const [relightLights, setRelightLights] = useState<StageLight[]>(DEFAULT_LIGHTS);
+  const [relightAmbient, setRelightAmbient] = useState(15);
+  const [relightPrompt, setRelightPrompt] = useState("realistic photograph, natural skin texture, cinematic lighting");
   const [repairOpen, setRepairOpen] = useState(false);
   const [repairSource, setRepairSource] = useState("");
   const [repairMode, setRepairMode] = useState("face");
@@ -369,10 +1021,11 @@ export default function Home() {
   const [joyaiOpen, setJoyaiOpen] = useState(false);
   const [joyaiSource, setJoyaiSource] = useState("");
   const [joyaiInstruction, setJoyaiInstruction] = useState("");
-  const [joyaiSteps, setJoyaiSteps] = useState(20);
+  const [joyaiSteps, setJoyaiSteps] = useState(4);
   const [joyaiJob, setJoyaiJob] = useState("");
   const [joyaiResult, setJoyaiResult] = useState("");
   const [joyaiState, setJoyaiState] = useState("Ready");
+  const [joyaiSubmitting, setJoyaiSubmitting] = useState(false);
   const [repairBox, setRepairBox] = useState<{
     x: number;
     y: number;
@@ -385,6 +1038,14 @@ export default function Home() {
 
   const [datasetOpen,setDatasetOpen]=useState(false); const [datasetItems,setDatasetItems]=useState<DatasetItem[]>([]); const [datasetTrigger,setDatasetTrigger]=useState(""); const [datasetSize,setDatasetSize]=useState(768); const [datasetCrop,setDatasetCrop]=useState(true); const [datasetState,setDatasetState]=useState("Ready"); const [datasetBasePrompt,setDatasetBasePrompt]=useState(""); const [datasetVariation,setDatasetVariation]=useState("Front"); const [datasetJob,setDatasetJob]=useState(""); const [datasetJobState,setDatasetJobState]=useState("Ready"); const [datasetPendingPrompt,setDatasetPendingPrompt]=useState("");
   const [trainingInspectId,setTrainingInspectId]=useState(""); const [trainingInspectZoom,setTrainingInspectZoom]=useState(1);
+  const [sketch3DOpen,setSketch3DOpen]=useState(false);
+  const [referenceComposerOpen,setReferenceComposerOpen]=useState(false);
+  const [senseNovaOpen,setSenseNovaOpen]=useState(false);
+  const [lladaOpen,setLladaOpen]=useState(false);
+  const [kreaFastOpen,setKreaFastOpen]=useState(false);
+  const [variationLabOpen,setVariationLabOpen]=useState(false);
+  const [promptBatchOpen,setPromptBatchOpen]=useState(false);
+  const [portraitTransformerOpen,setPortraitTransformerOpen]=useState(false);
   const [trainingStudioOpen,setTrainingStudioOpen]=useState(false); const [trainingSessionLoaded,setTrainingSessionLoaded]=useState(false); const [trainingSession,setTrainingSession]=useState("Froja_Training_001"); const [trainingType,setTrainingType]=useState("Character"); const [trainingConcept,setTrainingConcept]=useState(""); const [trainingShots,setTrainingShots]=useState<string[]>(trainingShotOptions.Character.map(item=>item[0])); const [trainingEnvironments,setTrainingEnvironments]=useState<string[]>(["Studio"]); const [trainingImagesPerSetup,setTrainingImagesPerSetup]=useState(1); const [trainingQueue,setTrainingQueue]=useState<TrainingTask[]>([]); const [trainingJob,setTrainingJob]=useState(""); const [trainingPending,setTrainingPending]=useState({name:"",position:"",environment:"",prompt:""}); const [trainingResults,setTrainingResults]=useState<TrainingResult[]>([]); const [trainingState,setTrainingState]=useState("Ready"); const [trainingGalleryGroup,setTrainingGalleryGroup]=useState("Setup");
   const [materialReferences,setMaterialReferences]=useState<MaterialReference[]>([]); const [materialFolder,setMaterialFolder]=useState(""); const [materialLibraryState,setMaterialLibraryState]=useState("Ready");
   const [promptCardsOpen,setPromptCardsOpen]=useState(false); const [promptCardSelections,setPromptCardSelections]=useState<Record<string,string>>({}); const [promptCardConsistency,setPromptCardConsistency]=useState(true); const [customPromptCard,setCustomPromptCard]=useState(""); const [customPromptCards,setCustomPromptCards]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem("froja-custom-prompt-cards")||"[]")}catch{return[]}});
@@ -393,23 +1054,30 @@ export default function Home() {
   const addCustomPromptCard=()=>{const value=customPromptCard.trim();if(!value)return;setCustomPromptCards(items=>items.includes(value)?items:[...items,value]);setPromptCardSelections(items=>({...items,Custom:value}));setCustomPromptCard("");};
   const trainingInspectIndex=trainingResults.findIndex(item=>item.id===trainingInspectId); const trainingInspectItem=trainingInspectIndex>=0?trainingResults[trainingInspectIndex]:undefined;
   const stepTrainingInspection=(direction:number)=>{if(!trainingResults.length)return;const next=(Math.max(0,trainingInspectIndex)+direction+trainingResults.length)%trainingResults.length;setTrainingInspectId(trainingResults[next].id);setTrainingInspectZoom(1);};
-  useEffect(()=>{if(!trainingInspectId)return;const handler=(event:KeyboardEvent)=>{if(event.key==="Escape")setTrainingInspectId("");if(event.key==="ArrowLeft")stepTrainingInspection(-1);if(event.key==="ArrowRight")stepTrainingInspection(1);};window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);},[trainingInspectId,trainingInspectIndex,trainingResults]);
-  const [appearanceOpen,setAppearanceOpen]=useState(true); const [appearanceCategory,setAppearanceCategory]=useState("Materials"); const [appearanceSearch,setAppearanceSearch]=useState(""); const [appearanceSelections,setAppearanceSelections]=useState<Record<string,string>>({}); const [appearanceColor,setAppearanceColor]=useState("#3c8f8b"); const [appearanceHarmony,setAppearanceHarmony]=useState("Cool Analogous"); const [appearanceRoughness,setAppearanceRoughness]=useState(62); const [appearanceWeathering,setAppearanceWeathering]=useState(38); const [appearanceConsistency,setAppearanceConsistency]=useState(true); const [appearanceTarget,setAppearanceTarget]=useState("Main object / subject");
+  useEffect(()=>{if(!trainingInspectId)return;const handler=(event:KeyboardEvent)=>{if(event.key==="Escape")setTrainingInspectId("");if(event.key==="ArrowLeft"||event.key==="ArrowRight"){const direction=event.key==="ArrowLeft"?-1:1;const next=(Math.max(0,trainingInspectIndex)+direction+trainingResults.length)%trainingResults.length;setTrainingInspectId(trainingResults[next].id);setTrainingInspectZoom(1);}};window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);},[trainingInspectId,trainingInspectIndex,trainingResults]);
+  const [appearanceCategory,setAppearanceCategory]=useState("Materials"); const appearanceSearch=""; const [appearanceSelections,setAppearanceSelections]=useState<Record<string,string>>({}); const [appearanceColor,setAppearanceColor]=useState("#3c8f8b"); const [appearanceHarmony,setAppearanceHarmony]=useState("Cool Analogous"); const [appearanceRoughness,setAppearanceRoughness]=useState(62); const [appearanceWeathering,setAppearanceWeathering]=useState(38); const [appearanceConsistency,setAppearanceConsistency]=useState(true); const [appearanceTarget,setAppearanceTarget]=useState("Main object / subject");
+  const [videoOpen,setVideoOpen]=useState(false); const [videoMode,setVideoMode]=useState<"text"|"image"|"edit"|"reference">("image"); const [videoEngine,setVideoEngine]=useState({online:false,configured:false}); const [videoModel,setVideoModel]=useState("ltx2b"); const [minimaxVideo,setMinimaxVideo]=useState<{enabled:boolean;installed:boolean;missing:string[];supported:boolean;label:string;tier:string;max_seconds:number;busy:boolean}|null>(null); const [videoPrompt,setVideoPrompt]=useState("Slow cinematic camera movement, natural subject motion, stable identity and coherent lighting."); const [videoSpeech,setVideoSpeech]=useState(""); const [videoSource,setVideoSource]=useState(""); const [videoAudio,setVideoAudio]=useState(""); const [videoProfile,setVideoProfile]=useState("safe"); const [videoJob,setVideoJob]=useState(""); const [videoState,setVideoState]=useState("Ready"); const [videoProgress,setVideoProgress]=useState(0); const [videoResult,setVideoResult]=useState(""); const [videoTrimStart,setVideoTrimStart]=useState(0); const [videoTrimEnd,setVideoTrimEnd]=useState(0); const [videoSpeed,setVideoSpeed]=useState(1); const [videoAspect,setVideoAspect]=useState("original");
 
   const loadMaterialLibrary=async()=>{setMaterialLibraryState("Scanning…");try{const response=await fetch("/api/materials");const result=await response.json();if(!response.ok)throw new Error(result.error||"Material scan failed.");setMaterialReferences(Array.isArray(result.items)?result.items:[]);setMaterialFolder(result.folder||"");setMaterialLibraryState(`${result.items?.length||0} local material${result.items?.length===1?"":"s"} found`);}catch(caught){setMaterialLibraryState(caught instanceof Error?caught.message:"Material scan failed.");}};
   useEffect(()=>{loadMaterialLibrary();},[]);
-  const currentAppearancePresets=useMemo(()=>appearanceCategory==="Materials"?[...appearanceLibrary.Materials.presets,...materialReferences.map(item=>({name:item.name,prompt:item.prompt,preview:`url("${item.preview}") center/cover no-repeat`}))]:appearanceLibrary[appearanceCategory].presets,[appearanceCategory,materialReferences]);
+  const currentAppearancePresets=useMemo(()=>appearanceCategory==="Materials"?[...appearanceLibrary.Materials.presets,...materialReferences.map(item=>({name:item.name,prompt:item.prompt,preview:`url("${item.preview}") center/cover no-repeat`}))]:appearanceLibrary[appearanceCategory].presets,[appearanceCategory,materialReferences]);  useEffect(()=>{fetch("/api/private-video/status").then(response=>response.json()).then(status=>setVideoEngine({online:!!status.online,configured:!!status.configured})).catch(()=>setVideoEngine({online:false,configured:false}));},[]);
   useEffect(() => {
     const load = async () => {
       try {
         const [status, m, l] = await Promise.all([
-          fetch("/api/status").then((r) => r.json()),
+          fetch("/api/status").then((r) => r.json()).then((status) => {
+            setEngine(status.engine);
+            setEngineError(status.engine_error || "");
+            setCounts(status.counts);
+            return status;
+          }),
           fetch("/api/models?type=checkpoints&limit=5000").then((r) =>
             r.json(),
-          ),
+          ).then((data) => { setModels(data.items); return data; }),
           fetch("/api/models?type=loras&limit=5000").then((r) => r.json()),
         ]);
         setEngine(status.engine);
+        setEngineError(status.engine_error || "");
         setCounts(status.counts);
         setModels(m.items);
         setLoras(l.items);
@@ -457,6 +1125,24 @@ export default function Home() {
   }, [job, prompt, negative, checkpoint, style, seed, width, height, steps, cfg, sampler]);
 
   useEffect(() => {
+    if (!videoJob) return;
+    const timer = setInterval(async () => {
+      const result = await fetch(`/api/private-video/jobs/${videoJob}`).then((r) => r.json());
+      setVideoState(result.phase || result.status || "Running");
+      setVideoProgress(Number(result.progress || 0));
+      if (result.status === "complete") {
+        setVideoResult(result.video_url || result.output || "");
+        setVideoJob("");
+        setVideoState("Complete");
+      } else if (["failed", "error", "cancelled", "offline"].includes(result.status)) {
+        setError(result.error || `Video job ${result.status}.`);
+        setVideoJob("");
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [videoJob]);
+
+  useEffect(() => {
     localStorage.setItem("froja-theme", uiTheme);
     localStorage.setItem("froja-font-scale", String(fontScale));
     localStorage.setItem("froja-text-scale", String(textScale));
@@ -469,6 +1155,42 @@ export default function Home() {
   }, [uiTheme, fontScale, textScale, fontFamily, iconStyle, boldText, uiLanguage, customBackground]);
 
   useEffect(() => { localStorage.setItem("froja-generation-history", JSON.stringify(generationHistory.slice(0, 200))); }, [generationHistory]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pinned-loras")
+      .then((response) => response.json())
+      .then((data) => {
+        if (cancelled) return;
+        const serverItems = Array.isArray(data.items) ? data.items.filter((item: unknown): item is string => typeof item === "string") : [];
+        setPinnedLoras((browserItems) => [...new Set([...serverItems, ...browserItems])]);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setPinnedLorasLoaded(true); });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!pinnedLorasLoaded) return;
+    localStorage.setItem("froja-pinned-loras", JSON.stringify(pinnedLoras));
+    fetch("/api/pinned-loras", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: pinnedLoras }),
+    }).catch(() => {});
+  }, [pinnedLoras, pinnedLorasLoaded]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pinned-checkpoints").then((response) => response.json()).then((data) => {
+      if (cancelled) return;
+      const serverItems = Array.isArray(data.items) ? data.items.filter((item: unknown): item is string => typeof item === "string") : [];
+      setPinnedCheckpoints((browserItems) => [...new Set([...serverItems, ...browserItems])]);
+    }).catch(() => {}).finally(() => { if (!cancelled) setPinnedCheckpointsLoaded(true); });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!pinnedCheckpointsLoaded) return;
+    localStorage.setItem("froja-pinned-checkpoints", JSON.stringify(pinnedCheckpoints));
+    fetch("/api/pinned-checkpoints", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: pinnedCheckpoints }) }).catch(() => {});
+  }, [pinnedCheckpoints, pinnedCheckpointsLoaded]);
   useEffect(() => {
     if (!faceJob) return;
     const timer = setInterval(async () => {
@@ -493,6 +1215,29 @@ export default function Home() {
     }, 1500);
     return () => clearInterval(timer);
   }, [faceJob]);
+  useEffect(() => {
+    if (!transformJob) return;
+    const timer = setInterval(async () => {
+      try {
+        const result = await fetch(`/api/jobs/${transformJob}`).then((response) => response.json());
+        setTransformState(result.status);
+        if (result.status === "complete" && result.images?.[0]) {
+          setTransformResult(result.images[0]);
+          setTransformJob("");
+          setTransformState("Complete");
+        } else if (result.status === "failed" || result.status === "error") {
+          setError(typeof result.error === "string" ? result.error : "Character transformation failed.");
+          setTransformJob("");
+          setTransformState("Error");
+        }
+      } catch {
+        setError("Froja lost contact with the Character Transformer.");
+        setTransformJob("");
+        setTransformState("Disconnected");
+      }
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [transformJob]);
   useEffect(() => {
     if (!toolJob) return;
     const timer = setInterval(async () => {
@@ -566,21 +1311,25 @@ export default function Home() {
   useEffect(() => {
     if (!joyaiJob) return;
     const timer = setInterval(async () => {
-      const result = await fetch(`/api/joyai-jobs/${joyaiJob}`).then((r) =>
-        r.json(),
-      );
-      setJoyaiState(result.status);
-      if (result.status === "complete" && result.images?.[0]) {
-        setJoyaiResult(result.images[0]);
+      try {
+        const response = await fetch(`/api/joyai-jobs/${joyaiJob}`);
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Could not read the Smart Edit job.");
+        setJoyaiState(result.status);
+        if (result.status === "complete" && result.images?.[0]) {
+          setJoyaiResult(result.images[0]);
+          setJoyaiJob("");
+          setJoyaiState("Complete");
+        }
+        if (result.status === "failed" || result.status === "error") {
+          setError(typeof result.error === "string" ? result.error : "JoyAI Smart Edit failed.");
+          setJoyaiJob("");
+          setJoyaiState("Error");
+        }
+      } catch (failure) {
+        setError(failure instanceof Error ? failure.message : "Froja lost contact with JoyAI.");
         setJoyaiJob("");
-        setJoyaiState("Complete");
-      }
-      if (result.status === "failed" || result.status === "error") {
-        setError(
-          typeof result.error === "string" ? result.error : "JoyAI Smart Edit failed.",
-        );
-        setJoyaiJob("");
-        setJoyaiState("Error");
+        setJoyaiState("Disconnected");
       }
     }, 2500);
     return () => clearInterval(timer);
@@ -622,16 +1371,18 @@ export default function Home() {
       [...models]
         .filter((m) => m.name.toLowerCase().includes(modelQuery.toLowerCase()))
         .sort((a, b) => {
-          const aVerified = ["Flux2-Klein", "Mage-Flow", "Krea-2"].includes(a.architecture) && a.size < 10 * 1024 ** 3;
-          const bVerified = ["Flux2-Klein", "Mage-Flow", "Krea-2"].includes(b.architecture) && b.size < 10 * 1024 ** 3;
-          return Number(bVerified) - Number(aVerified) || a.name.localeCompare(b.name);
+          const aPinned = pinnedCheckpoints.includes(a.relative);
+          const bPinned = pinnedCheckpoints.includes(b.relative);
+          const aVerified = ["Flux2-Klein", "Mage-Flow", "Krea-2", "Qwen-Image-2.1"].includes(a.architecture) && a.size < 10 * 1024 ** 3;
+          const bVerified = ["Flux2-Klein", "Mage-Flow", "Krea-2", "Qwen-Image-2.1"].includes(b.architecture) && b.size < 10 * 1024 ** 3;
+          return Number(bPinned) - Number(aPinned) || Number(bVerified) - Number(aVerified) || a.name.localeCompare(b.name);
         })
         .slice(0, 500),
-    [models, modelQuery],
+    [models, modelQuery, pinnedCheckpoints],
   );
   const verifiedCompactModels = useMemo(
     () => models
-      .filter((m) => ["Flux2-Klein", "Mage-Flow", "Krea-2"].includes(m.architecture) && m.size < 10 * 1024 ** 3)
+      .filter((m) => ["Flux2-Klein", "Mage-Flow", "Krea-2", "Qwen-Image-2.1"].includes(m.architecture) && m.size < 10 * 1024 ** 3)
       .sort((a, b) => a.name.localeCompare(b.name)),
     [models],
   );
@@ -644,12 +1395,13 @@ export default function Home() {
             .includes(loraQuery.toLowerCase()),
         )
         .sort((a, b) =>
+          Number(pinnedLoras.includes(b.relative)) - Number(pinnedLoras.includes(a.relative)) ||
           Number(selectedLoras.some((item) => item.path === b.path)) - Number(selectedLoras.some((item) => item.path === a.path)) ||
           Number(Boolean(b.preview)) - Number(Boolean(a.preview)) ||
           a.name.localeCompare(b.name),
         )
         .slice(0, 1000),
-    [loras, loraQuery, selectedLoras],
+    [loras, loraQuery, selectedLoras, pinnedLoras],
   );
   const current = models.find((m) => m.relative === checkpoint);
   const currentCamera = cameraProfiles.find((camera) => camera.id === cameraProfile) || cameraProfiles[0];
@@ -659,8 +1411,47 @@ export default function Home() {
   const isKrea2 = current?.architecture === "Krea-2";
   const isFlux2Klein = current?.architecture === "Flux2-Klein";
   const isMageFlow = current?.architecture === "Mage-Flow";
+  const isQwenImage21 = current?.architecture === "Qwen-Image-2.1";
+  const isMossImage = current?.architecture === "MOSS-Image";
+  const isMiniMaxH3Image = current?.architecture === "MiniMax-H3-Image";
+  useEffect(() => {
+    if (!isMiniMaxH3Image) return;
+    // Distilled model: 6 steps, CFG 1, euler. Tuned for ~2048x2048 of area.
+    const timer = window.setTimeout(() => {
+      setSteps(6);
+      setCfg(1);
+      setSampler("euler");
+      setWidth(2048);
+      setHeight(2048);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isMiniMaxH3Image]);
+  useEffect(() => {
+    if (!isMossImage) return;
+    const timer = window.setTimeout(() => {
+      setSteps(25);
+      setCfg(2.5);
+      setSampler("er_sde");
+      setWidth(512);
+      setHeight(512);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isMossImage]);
+  const isQwenImage21Gguf = isQwenImage21 && current?.name.toLowerCase().endsWith(".gguf");
   const isFlux = current?.architecture === "Flux" || isFlux2Klein;
   const isDarkBeast = isKrea2 && /darkbeast/i.test(current?.name || "");
+
+  useEffect(() => {
+    if (!isQwenImage21) return;
+    const timer = window.setTimeout(() => {
+      setSteps(25);
+      setCfg(1);
+      setSampler("euler");
+      setWidth(1024);
+      setHeight(1024);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isQwenImage21]);
 
   useEffect(() => {
     if (!isKrea2) return;
@@ -734,6 +1525,18 @@ export default function Home() {
     setError("");
   }
 
+  function togglePinnedLora(lora: Model) {
+    setPinnedLoras((items) =>
+      items.includes(lora.relative)
+        ? items.filter((item) => item !== lora.relative)
+        : [...items, lora.relative],
+    );
+  }
+
+  function togglePinnedCheckpoint(model: Model) {
+    setPinnedCheckpoints((items) => items.includes(model.relative) ? items.filter((item) => item !== model.relative) : [...items, model.relative]);
+  }
+
   function prepareLora(lora: Model) {
     if (!selectedLoras.some((item) => item.path === lora.path))
       toggleLora(lora);
@@ -767,6 +1570,15 @@ export default function Home() {
     setLoras(refreshed.items);
     setError("");
     setContextLora(null);
+  }
+
+  async function setCheckpointPreview(model: Model) {
+    if (!hasGenerated) { setError("Generate an image in Froja first, then right-click the checkpoint and assign it as the preview."); setContextCheckpoint(null); return; }
+    const response = await fetch("/api/checkpoints/set-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checkpoint_path: model.path, image_url: image }) });
+    const result = await response.json();
+    if (!response.ok) { setError(result.error || "Could not save the checkpoint preview."); setContextCheckpoint(null); return; }
+    const refreshed = await fetch("/api/models?type=checkpoints&limit=5000&refresh=1").then((r) => r.json());
+    setModels(refreshed.items); setError(""); setContextCheckpoint(null);
   }
 
   async function promptAssist(mode: "enhance" | "create") {
@@ -810,7 +1622,7 @@ export default function Home() {
         body: JSON.stringify({
           image: imagePromptSource,
           detail: imagePromptDetail,
-          model: "llama3.2-vision:latest",
+          model: "qwen3-vl:4b",
         }),
       });
       const result = await response.json();
@@ -818,8 +1630,9 @@ export default function Home() {
       setImagePromptResult(result.prompt);
       setImagePromptState("Complete");
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Image analysis failed.");
-      setImagePromptState("Error");
+      const message = error instanceof Error ? error.message : "Image analysis failed.";
+      setError(message);
+      setImagePromptState(message);
     }
   }
 
@@ -898,7 +1711,7 @@ export default function Home() {
     fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({checkpoint,architecture:current?.architecture,prompt:composed,negative_prompt:[negative,"duplicate composition, repeated camera angle, inconsistent identity, changed design, low detail, blur, watermark, text, malformed anatomy"].filter(Boolean).join(", "),steps,cfg,seed:Math.floor(Math.random()*4294967295),width,height,sampler,scheduler:"normal",loras:selectedLoras.map((l)=>({name:l.relative,strength:l.strength}))})})
       .then(async response=>{const result=await response.json();if(!response.ok)throw new Error(result.error||"Generation failed.");setTrainingJob(result.prompt_id);setTrainingState(`Generating ${name}…`);})
       .catch(caught=>{setTrainingQueue([]);setTrainingState(caught instanceof Error?caught.message:"Generation failed.");});
-  },[trainingQueue,trainingJob,trainingType,trainingConcept,trainingResults.length,checkpoint,current?.architecture,negative,steps,cfg,width,height,sampler,selectedLoras,appearanceSelections,appearanceColor,appearanceHarmony,appearanceRoughness,appearanceWeathering,appearanceConsistency,appearanceTarget,promptCardSelections,promptCardConsistency]);
+  },[trainingQueue,trainingJob,trainingType,trainingConcept,trainingResults.length,checkpoint,current?.architecture,negative,steps,cfg,width,height,sampler,selectedLoras,appearanceSelections,appearanceColor,appearanceHarmony,appearanceRoughness,appearanceWeathering,appearanceConsistency,appearanceTarget,promptCardSelections,promptCardConsistency,materialReferences]);
 
   useEffect(() => {
     if(!trainingJob)return;
@@ -952,7 +1765,7 @@ export default function Home() {
     const item = datasetItems.find((entry) => entry.id === id); if (!item) return;
     setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, state:"Analyzing locally…"} : entry));
     try {
-      const response = await fetch("/api/image-to-prompt", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({image:item.image, detail:"balanced", model:"llama3.2-vision:latest"}) });
+      const response = await fetch("/api/image-to-prompt", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({image:item.image, detail:"balanced", model:"qwen3-vl:4b"}) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error || "Captioning failed.");
       setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, caption:result.prompt, state:"Caption ready"} : entry));
     } catch (caught) { setDatasetItems((items) => items.map((entry) => entry.id === id ? {...entry, state:(caught instanceof Error && /refused|urlopen|10061/i.test(caught.message)) ? "Local visual captioning is offline — start Ollama, or use Read Original Prompt & Settings" : caught instanceof Error ? caught.message : "Captioning failed"} : entry)); }
@@ -1027,6 +1840,91 @@ export default function Home() {
     reader.onload = () => setter(String(reader.result || ""));
     reader.readAsDataURL(file);
   }
+  function loadVideoReferenceFile(file: File | undefined) {
+    if (!file) return;
+    if (!["image/", "video/", "audio/"].some((prefix) => file.type.startsWith(prefix))) {
+      setError("Choose an image, video, or audio reference file."); return;
+    }
+    if (file.size > 150 * 1024 * 1024) { setError("Reference files are limited to 150 MB during private testing."); return; }
+    const reader = new FileReader();
+    reader.onload = () => setVideoSource(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  }
+
+  useEffect(() => {
+    if (!videoOpen) return;
+    fetch("/api/minimax-video/status").then((r) => r.json()).then(setMinimaxVideo).catch(() => setMinimaxVideo(null));
+  }, [videoOpen]);
+  async function toggleMinimaxVideo(enabled: boolean) {
+    const result = await fetch("/api/minimax-video/enable", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) }).then((r) => r.json());
+    if (result.error) setError(result.error); else setMinimaxVideo(result);
+  }
+  async function runPrivateVideo() {
+    if (!videoPrompt.trim()) return setError("Describe the video you want to create.");
+    if (videoMode !== "text" && !videoSource) return setError("Choose a source image or video first.");
+    setError(""); setVideoResult(""); setVideoState("Queueing"); setVideoProgress(0);
+    const response = await fetch("/api/private-video/generate", {
+      method:"POST", headers:{"Content-Type":"application/json", ...(videoModel === "minimax-h3" ? {"X-Froja-Engine":"minimax-h3"} : {})},
+      body:JSON.stringify({
+        mode:videoMode,
+        engine:videoModel,
+        prompt:videoPrompt,
+        source:videoSource,
+        audio:videoAudio,
+        speech:videoSpeech,
+        profile:videoProfile,
+        trim_start:videoTrimStart,
+        trim_end:videoTrimEnd,
+        speed:videoSpeed,
+        aspect:videoAspect,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) { setVideoState("Unavailable"); return setError(result.error || "Private video engine is unavailable."); }
+    setVideoJob(result.job_id); setVideoState("Starting");
+  }
+
+  async function cancelPrivateVideo() {
+    if (!videoJob) return;
+    await fetch("/api/private-video/cancel", {method:"POST",headers:{"Content-Type":"application/json", ...(videoJob.startsWith("mm-") ? {"X-Froja-Engine":"minimax-h3"} : {})},body:JSON.stringify({job_id:videoJob})});
+    setVideoState("Cancelling");
+  }
+  async function runCharacterTransform() {
+    if (!transformSource) {
+      setError("Choose the original character or object image.");
+      return;
+    }
+    if (!transformInstruction.trim()) {
+      setError("Describe what you want to transform.");
+      return;
+    }
+    setError("");
+    setTransformResult("");
+    setTransformState("Queueing Qwen Image Edit");
+    const response = await fetch("/api/character-transform", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source_image: transformSource,
+        reference_image: transformReference,
+        environment_image: transformEnvironment,
+        instruction: transformInstruction,
+        preserve: transformPreserve,
+        transparent: transformTransparent,
+        width: 1024,
+        height: 1024,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      setError(result.error || "Character Transformer failed.");
+      setTransformState("Error");
+      return;
+    }
+    setTransformJob(result.prompt_id);
+    setTransformState("Running — the local Qwen model may take several minutes");
+  }
+
   async function runFaceSwap() {
     if (!faceSource || !faceTarget) {
       setError("Choose both a source face and a target image.");
@@ -1041,10 +1939,13 @@ export default function Home() {
       body: JSON.stringify({
         source_image: faceSource,
         target_image: faceTarget,
-        source_face: 0,
-        target_face: 0,
+        source_face: faceSourceIndex,
+        target_face: faceTargetIndex,
         restoration: faceRestore,
-        visibility: 0.85,
+        visibility: faceVisibility,
+        mode: faceMode,
+        face_count: faceCount,
+        mapping: faceMapping,
       }),
     });
     const result = await response.json();
@@ -1056,7 +1957,7 @@ export default function Home() {
     setFaceJob(result.prompt_id);
     setFaceState("Running");
   }
-  function openImageTool(mode: "img2img" | "inpaint" | "controlnet") {
+  function openImageTool(mode: "img2img" | "inpaint" | "controlnet" | "krea2-reference") {
     setToolMode(mode);
     setToolSource("");
     setToolMask("");
@@ -1081,6 +1982,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         mode: toolMode,
+        checkpoint,
         source_image: toolSource,
         mask_image: toolMask,
         prompt,
@@ -1118,7 +2020,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         source_image: relightSource,
-        prompt: `${prompt}, ${artStylePrompts[style]}, realistic ${relightDirection} directional illumination, ${relightQuality} light, light color ${relightColor}, ${relightBrightness}% brightness`,
+        prompt: relightPrompt.trim() || "realistic photograph, natural skin texture, cinematic lighting",
         negative_prompt: negative,
         direction: relightDirection,
         strength: relightStrength,
@@ -1127,6 +2029,8 @@ export default function Home() {
         color: relightColor,
         light_x: relightX,
         light_y: relightY,
+        lights: relightLights,
+        ambient: relightAmbient,
         width: Math.min(width, 1024),
         height: Math.min(height, 1024),
         seed,
@@ -1246,27 +2150,31 @@ export default function Home() {
       return;
     }
     setError("");
-    setJoyaiState("Queueing — first load can take several minutes");
+    setJoyaiSubmitting(true);
+    setJoyaiState("Starting the low-memory JoyAI engine…");
     setJoyaiResult("");
-    const response = await fetch("/api/joyai-edit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        source_image: joyaiSource,
-        instruction: joyaiInstruction,
-        negative_prompt: negative,
-        steps: joyaiSteps,
-        seed,
-      }),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      setError(result.error || "JoyAI Smart Edit failed.");
+    try {
+      const response = await fetch("/api/joyai-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source_image: joyaiSource,
+          instruction: joyaiInstruction,
+          negative_prompt: negative,
+          steps: joyaiSteps,
+          seed,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "JoyAI Smart Edit failed.");
+      setJoyaiJob(result.prompt_id);
+      setJoyaiState("Running — this large local model may take 15–30 minutes");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Froja could not start Smart Edit.");
       setJoyaiState("Error");
-      return;
+    } finally {
+      setJoyaiSubmitting(false);
     }
-    setJoyaiJob(result.prompt_id);
-    setJoyaiState("Running — approximately 10–12 minutes");
   }
 
   function sendCameraMoveToJoyai() {
@@ -1290,7 +2198,7 @@ export default function Home() {
     }
     setError("");
     setJobState("Queueing");
-    const styled = [prompt, artStylePrompts[style], currentCamera.prompt]
+    const styled = [expandPromptWildcards(prompt), styleEnabled ? artStylePrompts[style] : "", currentCamera.prompt]
       .filter(Boolean)
       .join(", ");
     const response = await fetch("/api/generate", {
@@ -1443,8 +2351,72 @@ export default function Home() {
     }
   }
 
+  const deckTools: DeckTool[] = [
+    { name: t("imagePrompt"), symbol: "eye", icon: <Icon name="image" />, description: "Drop in a picture and Froja writes a prompt that describes it.", open: () => setImagePromptOpen(true) },
+    { name: "SenseNova Studio", symbol: "atom", badge: "Q4", icon: <Icon name="enhance" />, description: "Create images with the SenseNova model.", open: () => setSenseNovaOpen(true) },
+    { name: "LLaDA Studio", symbol: "layers", badge: "INT8", icon: <Icon name="enhance" />, description: "Create images with the LLaDA model.", open: () => setLladaOpen(true) },
+    { name: "Krea Fast Studio", symbol: "bolt", badge: "4×", icon: <Icon name="speed" />, description: "Quick drafts with Krea — four images fast.", open: () => setKreaFastOpen(true) },
+    { name: "Variation Lab", symbol: "hexdots", badge: "6", icon: <Icon name="variants" />, description: "Make six variations of one idea and pick the best.", open: () => setVariationLabOpen(true) },
+    { name: "RedNode Studio", symbol: "nodes", badge: "PLAN B", icon: <Icon name="workflow" />, description: "Open the node workflow studio in a new window.", open: () => { window.open("http://127.0.0.1:9061", "froja-rednode-studio", "noopener,noreferrer"); } },
+    { name: "Prompt Batch Studio", symbol: "queue", badge: "QUEUE", icon: <Icon name="workflow" />, description: "Queue many prompts and let Froja work through them.", open: () => setPromptBatchOpen(true) },
+    { name: "My Portrait Transformer", symbol: "portrait", badge: "KREA-2", icon: <Icon name="face" />, description: "Turn your portrait into new characters and styles.", open: () => setPortraitTransformerOpen(true) },
+    { name: "Materials & Appearance", symbol: "sphere", badge: materialReferences.length || "OPEN", icon: <Icon name="material" />, description: "Pick materials, hair, fabric and landscapes for your prompt.", open: () => { setAppearanceCategory("Materials"); setTrainingStudioOpen(true); } },
+    { name: "Froja Training Studio", symbol: "target", badge: trainingResults.length || "NEW", icon: <Icon name="train" />, description: "Train Froja on a character or subject.", open: () => setTrainingStudioOpen(true) },
+    { name: "Sketch & 3D Studio", symbol: "cube", badge: "3D", icon: <Icon name="cube" />, description: "Turn a sketch into a finished picture or a 3D look.", open: () => setSketch3DOpen(true) },
+    { name: "Reference Composer", symbol: "compose", badge: "5", icon: <Icon name="compose" />, description: "Combine up to five reference images into one scene.", open: () => setReferenceComposerOpen(true) },
+    { name: "LoRA Dataset Studio", symbol: "database", badge: datasetItems.length || "ADD", icon: <Icon name="dataset" />, description: "Collect and caption pictures to train a LoRA.", open: () => setDatasetOpen(true) },
+    { name: t("enhance"), symbol: "zoomplus", icon: <Icon name="enhance" />, description: "Upscale and sharpen an existing image.", open: () => setEnhanceOpen(true) },
+    { name: t("imageImage"), symbol: "swap", icon: <Icon name="image" />, description: "Start from a picture and change it with a prompt.", open: () => openImageTool("img2img") },
+    { name: t("inpaint"), symbol: "brush", icon: <Icon name="inpaint" />, description: "Paint over one area and replace only that part.", open: () => openImageTool("inpaint") },
+    { name: t("face"), symbol: "face", icon: <Icon name="face" />, description: "Swap or restore faces in a picture.", open: () => setFaceOpen(true) },
+    { name: "Character & Object Transformer", symbol: "cycle", icon: <Icon name="transform" />, description: "Turn a character or object into a new material or style.", open: () => setTransformOpen(true) },
+    { name: t("control"), symbol: "pose", icon: <Icon name="control" />, description: "Guide the pose and shape with ControlNet.", open: () => openImageTool("controlnet") },
+    { name: t("relight"), symbol: "sun", icon: <Icon name="light" />, description: "Change the lighting of a picture.", open: () => setRelightOpen(true) },
+    { name: t("repair"), symbol: "wrench", icon: <Icon name="repair" />, description: "Fix hands, faces and small mistakes.", open: () => setRepairOpen(true) },
+    { name: t("smart"), symbol: "wand", icon: <Icon name="wand" />, description: "Edit a picture by simply describing the change.", open: () => setJoyaiOpen(true) },
+    { name: "Video Studio", symbol: "film", badge: videoEngine.online ? "READY" : "PRIVATE", icon: <Icon name="video" />, description: "Make short videos from text or pictures.", open: () => setVideoOpen(true) },
+  ];
+
+  // Studios that live in their own window (Video, Training, Library, Settings) go back to the slider when it closes.
+  const stationWindowOpen = station === "video" ? videoOpen
+    : station === "training" ? trainingStudioOpen
+    : station === "library" ? (navPanel === "library" || navPanel === "embeddings" || modelOpen || loraOpen)
+    : station === "settings" ? navPanel === "settings"
+    : null;
+  useEffect(() => {
+    if (stationWindowOpen === null) { stationWindowWasOpen.current = false; return; }
+    if (stationWindowOpen) stationWindowWasOpen.current = true;
+    else if (stationWindowWasOpen.current) { stationWindowWasOpen.current = false; setStation(""); }
+  }, [stationWindowOpen]);
+  const anyToolOpen = imagePromptOpen || senseNovaOpen || lladaOpen || kreaFastOpen || variationLabOpen || promptBatchOpen ||
+    portraitTransformerOpen || trainingStudioOpen || sketch3DOpen || referenceComposerOpen || datasetOpen || enhanceOpen ||
+    !!toolMode || faceOpen || transformOpen || relightOpen || repairOpen || joyaiOpen || videoOpen;
+  const createSteps = [
+    { id: "prompt", label: "Prompt" },
+    { id: "style", label: "Style & Artists" },
+    { id: "camera", label: "Camera" },
+    { id: "model", label: "Model & Generate" },
+  ];
+  const stations: (DeckTool & { id: string })[] = [
+    { id: "create", name: "Create", symbol: "brush", cover: "/covers/studio-create.webp", description: "Write your idea, choose the style, camera and model, then make the picture — one step at a time.", open: () => { setCreateStep(0); setStation("create"); } },
+    { id: "styles", name: "Styles & Artists", symbol: "palette", cover: "/covers/studio-styles.webp", description: "Browse art styles and artist influences and pick the look for your next picture.", open: () => { setCreateStep(1); setStation("create"); } },
+    { id: "pictures", name: "My Pictures", symbol: "gallery", cover: "/covers/studio-pictures.webp", description: "Your latest picture, your history and your favourites.", open: () => { setPreviewTab("history"); setStation("pictures"); } },
+    { id: "tools", name: "Tools", symbol: "toolbox", cover: "/covers/studio-tools.webp", badge: deckTools.length, description: "All Froja studios for editing, faces, light, repair, 3D and more — slide through them.", open: () => setStation("tools") },
+    { id: "video", name: "Video Studio", symbol: "film", cover: "/covers/studio-video.webp", badge: videoEngine.online ? "READY" : "PRIVATE", description: "Make short videos from text or pictures.", open: () => { setStation("video"); setVideoOpen(true); } },
+    { id: "training", name: "Training Studio", symbol: "target", cover: "/covers/studio-training.webp", badge: trainingResults.length || "NEW", description: "Create consistent picture sets and train Froja on a character or subject.", open: () => { setStation("training"); setTrainingStudioOpen(true); } },
+    { id: "library", name: "Models & LoRAs", symbol: "library", cover: "/covers/studio-library.webp", badge: counts.checkpoints + counts.loras, description: "Your checkpoints, LoRAs and embeddings — linked from their folders, never copied.", open: () => { setStation("library"); openNavigation("library"); } },
+    { id: "settings", name: "Settings", symbol: "gear", cover: "/covers/studio-settings.webp", description: "Language, look, LED colour, folders and maintenance.", open: () => { setStation("settings"); openNavigation("settings"); } },
+  ];
+  const stationIndex = Math.max(0, stations.findIndex((item) => item.id === (station === "create" && createStep === 1 ? "styles" : station)));
+  const goStation = (step: number) => {
+    // Close whatever studio window is open, then slide to the neighbouring studio.
+    setVideoOpen(false); setTrainingStudioOpen(false); setNavPanel("");
+    const next = stations[(stationIndex + step + stations.length) % stations.length];
+    next.open();
+  };
+
   return (
-    <main lang={uiLanguage} className={`studio theme-${uiTheme} font-${fontFamily} icons-${iconStyle} ${boldText ? "bold-text" : ""} ${customBackground ? "has-custom-background" : ""}`} style={{ "--font-scale": `${fontScale}%`, "--text-scale": textScale / 100, "--froja-bg-image": customBackground ? `url(${customBackground})` : "none" } as CSSProperties}>
+    <main lang={uiLanguage} className={`studio theme-graphite led-${ledColor} station-mode station-${station || "home"} create-step-${createStep} font-${fontFamily} icons-${iconStyle} ${boldText ? "bold-text" : ""} ${customBackground ? "has-custom-background" : ""}`} style={{ "--font-scale": `${fontScale}%`, "--text-scale": textScale / 100, "--froja-bg-image": customBackground ? `url(${customBackground})` : "none" } as CSSProperties}>
       <aside className="leftbar">
         <div className="logo brand-banner">
           <img src="/froja-brand-banner.png" alt="Froja Image Studio" />
@@ -1483,12 +2455,41 @@ export default function Home() {
           </button>
         </nav>
         <p className="nav-label">{t("tools")}</p>
+        <button className="deck-launch" onClick={() => setDeckOpen(true)}><Icon name="library" /><span>Slide Tools</span><span className="deck-led-mini">NEW</span></button>
         <nav>
           <button className="image-prompt-nav" onClick={() => setImagePromptOpen(true)}>
             <Icon name="image" /><span>{t("imagePrompt")}</span>
           </button>
+          <button className="sketch3d-nav" onClick={() => setSenseNovaOpen(true)}>
+            <Icon name="enhance" /><span>SenseNova Studio</span><i>Q4</i>
+          </button>
+          <button className="sketch3d-nav" onClick={() => setLladaOpen(true)}>
+            <Icon name="enhance" /><span>LLaDA Studio</span><i>INT8</i>
+          </button>
+          <button className="sketch3d-nav" onClick={() => setKreaFastOpen(true)}>
+            <Icon name="enhance" /><span>Krea Fast Studio</span><i>4×</i>
+          </button>
+          <button className="sketch3d-nav" onClick={() => setVariationLabOpen(true)}>
+            <Icon name="image" /><span>Variation Lab</span><i>6</i>
+          </button>
+          <button className="sketch3d-nav" onClick={() => window.open("http://127.0.0.1:9061", "froja-rednode-studio", "noopener,noreferrer")}>
+            <Icon name="workflow" /><span>RedNode Studio</span><i>Plan B</i>
+          </button>
+          <button className="sketch3d-nav" onClick={() => setPromptBatchOpen(true)}>
+            <Icon name="workflow" /><span>Prompt Batch Studio</span><i>Queue</i>
+          </button>
+          <button className="sketch3d-nav" onClick={() => setPortraitTransformerOpen(true)}>
+            <Icon name="face" /><span>My Portrait Transformer</span><i>Krea-2</i>
+          </button>
+          <button className="training-nav" onClick={() => { setAppearanceCategory("Materials"); setTrainingStudioOpen(true); }}>
+            <Icon name="create" /><span>Materials &amp; Appearance</span><i>{materialReferences.length || "Open"}</i>
+          </button>
           <button className="training-nav" onClick={() => setTrainingStudioOpen(true)}>
             <Icon name="create" /><span>Froja Training Studio</span><i>{trainingResults.length || "New"}</i>
+          </button>          <button className="sketch3d-nav" onClick={() => setSketch3DOpen(true)}>
+            <Icon name="model" /><span>Sketch &amp; 3D Studio</span><i>3D</i>
+          </button>          <button className="sketch3d-nav" onClick={() => setReferenceComposerOpen(true)}>
+            <Icon name="image" /><span>Reference Composer</span><i>5</i>
           </button>          <button className="dataset-nav" onClick={() => setDatasetOpen(true)}>
             <Icon name="lora" /><span>LoRA Dataset Studio</span><i>{datasetItems.length || "Add"}</i>
           </button>          <button className="enhance-nav" onClick={() => setEnhanceOpen(true)}>
@@ -1503,6 +2504,9 @@ export default function Home() {
           <button onClick={() => setFaceOpen(true)}>
             <Icon name="face" /><span>{t("face")}</span>
           </button>
+          <button onClick={() => setTransformOpen(true)}>
+            <Icon name="wand" /><span>Character &amp; Object Transformer</span>
+          </button>
           <button onClick={() => openImageTool("controlnet")}>
             <Icon name="control" /><span>{t("control")}</span>
           </button>
@@ -1514,6 +2518,9 @@ export default function Home() {
           </button>
           <button onClick={() => setJoyaiOpen(true)}>
             <Icon name="wand" /><span>{t("smart")}</span>
+          </button>
+          <button className="private-video-nav" onClick={() => setVideoOpen(true)}>
+            <Icon name="video" /><span>Video Studio</span><i>{videoEngine.online ? "Ready" : "Private"}</i>
           </button>
         </nav>
         <div className="engine">
@@ -1530,12 +2537,33 @@ export default function Home() {
         </div>
         <button className="settings" onClick={() => openNavigation("settings")}><Icon name="settings" /><span>{t("settings")}</span></button>
       </aside>
+      {deckOpen && <ToolDeck tools={deckTools} onClose={() => setDeckOpen(false)} />}
+      {station === "" && <ToolDeck home tools={stations} title="Studios" storageKey="froja-station-index" brand={<img className="deck-brand" src="/brand/froja-logo-3d.png" alt="Froja" />} topRight={<><SystemMonitor model={current ? { name: current.name, size: current.size, architecture: current.architecture } : undefined} /><LedPicker value={ledColor} onChange={setLedColor} /></>} onClose={() => undefined} />}
+      {station === "tools" && !anyToolOpen && <ToolDeck stay tools={deckTools} onClose={() => setStation("")} closeLabel="Back to all studios" />}
+      {station !== "" && (station !== "tools" || anyToolOpen) && (
+        <StationBar
+          name={stations[stationIndex].name}
+          symbol={stations[stationIndex].symbol || "brush"}
+          onHome={() => { setVideoOpen(false); setTrainingStudioOpen(false); setNavPanel(""); setStation(""); }}
+          onPrev={() => goStation(-1)}
+          onNext={() => goStation(1)}
+          prevName={stations[(stationIndex - 1 + stations.length) % stations.length].name}
+          nextName={stations[(stationIndex + 1) % stations.length].name}
+          steps={station === "create" ? createSteps : undefined}
+          step={station === "create" ? createStep : undefined}
+          onStep={station === "create" ? setCreateStep : undefined}
+          ledPicker={<LedPicker value={ledColor} onChange={setLedColor} />}
+          monitor={<SystemMonitor model={current ? { name: current.name, size: current.size, architecture: current.architecture } : undefined} />}
+        />
+      )}
 
       <section className="center">
         <header>
           <b className="header-title"><Icon name="create" /> Create</b>
           <span>/</span>
           <small>New Generation</small>
+          
+          <LedPicker value={ledColor} onChange={setLedColor} />
           <div className="header-state">{jobState}</div>
         </header>
         <section className="prompt-panel">
@@ -1591,6 +2619,7 @@ export default function Home() {
             />
           ) : (
             <div className="advanced-grid">
+              <div className="dimension-paper-preview"><div><i style={{aspectRatio:`${width}/${height}`}} /></div><span><b>{width} × {height} px</b><small>{width===height?"Square 1:1":width>height?"Landscape":"Portrait"}</small></span></div>
               <label>
                 Sampler
                 <select
@@ -1598,7 +2627,7 @@ export default function Home() {
                   onChange={(e) => setSampler(e.target.value)}
                 >
                   <option value="res_multistep">Res Multistep (Z-Image)</option>
-                  <option value="er_sde">ER-SDE (Krea-2)</option>
+                  <option value="er_sde">ER-SDE (Krea-2 / MOSS)</option>
                   <option value="euler">Euler</option>
                   <option value="euler_ancestral">Euler a</option>
                   <option value="dpmpp_2m">DPM++ 2M</option>
@@ -1631,9 +2660,9 @@ export default function Home() {
             </div>
           )}
           <div className="prompt-foot">
-            <button onClick={() => { setLoraQuery(""); setLoraOpen(true); }}>＋ Attach LoRA</button>
+            <button onClick={() => { setLoraQuery(""); setLoraOpen(true); }}>+ Attach LoRA</button>
             <button onClick={() => setImagePromptOpen(true)}>
-              ▧ Image to Prompt
+              Image to Prompt
             </button>
             <button
               disabled={!!assisting}
@@ -1649,7 +2678,7 @@ export default function Home() {
             >
               {assisting === "create"
                 ? "Ollama is creating…"
-                : "♧ Prompt Helper"}
+                : "Prompt Helper"}
             </button>
             <button onClick={protectAnatomyAndPose} title="Add stronger instructions for hands, faces, bodies, poses and held objects">
               Anatomy &amp; Pose
@@ -1662,16 +2691,51 @@ export default function Home() {
 
         <div className="section-title">
           <b>Styles</b>
-          <small>Applied automatically to your prompt</small>
+          <small>{styleEnabled ? "Applied automatically to your prompt" : "Style is off — your prompt is unchanged"}</small>
         </div>
-        <div className="style-picker">
+        <div className={`style-picker ${styleEnabled ? "" : "style-disabled"}`}>
           <div>
             <span>Selected style</span>
             <b>{style}</b>
-            <small>{artStylePrompts[style]}</small>
+            <small>{styleEnabled ? artStylePrompts[style] : "Saved but not applied to generation."}</small>
           </div>
-          <label>
-            Art Style / Artist Influence
+          <div className="style-control">
+            <div className="style-control-head">
+              <span className="style-control-label">Art Style / Creative &amp; Industrial Influence</span>
+              <label className="style-enable-switch">
+                <span>{styleEnabled ? "Style on" : "Style off"}</span>
+                <input
+                  type="checkbox"
+                  checked={styleEnabled}
+                  onChange={(event) => setStyleEnabled(event.target.checked)}
+                  aria-label="Apply selected art style to generation"
+                />
+              </label>
+            </div>
+            <div className="style-search-row">
+              <input
+                type="search"
+                value={styleSearch}
+                onChange={(e) => setStyleSearch(e.target.value)}
+                placeholder="Search artists and styles…"
+                aria-label="Search artists and styles"
+              />
+              <small>{filteredArtStyleOptions.length} found</small>
+            </div>
+            {styleSearch.trim() && (
+              <div className="style-search-results" role="listbox" aria-label="Matching artists and styles">
+                {filteredArtStyleOptions.length ? filteredArtStyleOptions.slice(0, 12).map(([name]) => (
+                  <button
+                    type="button"
+                    key={name}
+                    className={style === name ? "active" : ""}
+                    onClick={() => { setStyle(name); setStyleSearch(""); }}
+                  >
+                    {name}
+                  </button>
+                )) : <small>No matching artist or style</small>}
+              </div>
+            )}
             <select value={style} onChange={(e) => setStyle(e.target.value)}>
               {artStyleOptions.map(([name]) => (
                 <option key={name} value={name}>
@@ -1679,7 +2743,7 @@ export default function Home() {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
         </div>
 
         <div className="section-title camera-title">
@@ -1701,6 +2765,19 @@ export default function Home() {
           <span className="camera-spec"><small>Aperture</small><b>{currentCamera.aperture}</b></span>
           <strong>Change camera →</strong>
         </button>
+        {station === "create" && createStep === 2 && (
+          <div className="camera-deck-step">
+            <ToolDeck inline stay title="Cameras" storageKey="froja-camera-index" actionLabel="Use this camera"
+              startIndex={cameraProfiles.findIndex((c) => c.id === cameraProfile)}
+              onClose={() => undefined}
+              tools={cameraProfiles.map((c) => ({
+                name: c.name, symbol: "camera", cover: `/camera-covers/${c.id}.webp`,
+                badge: c.id === cameraProfile ? "IN USE" : c.focal,
+                description: c.id === "none" ? c.use : `${c.lens} · ${c.focal} · ${c.aperture} — ${c.use}`,
+                open: () => setCameraProfile(c.id),
+              }))} />
+          </div>
+        )}
 
         <section className="model-settings">
           <div className="section-title">
@@ -1750,7 +2827,7 @@ export default function Home() {
                         : "Optional style and character adapters")}
                   </small>
                 </span>
-                <em>＋</em>
+                <em>+</em>
               </button>
             </div>
             <div className="sliders">
@@ -1798,15 +2875,15 @@ export default function Home() {
                     setHeight(h);
                   }}
                 >
-                  <option value="512x512">512 Square</option>
-                  <option value="768x768">768 Square</option>
-                  <option value="1024x1024">1024 Square</option>
-                  <option value="832x1216">832 × 1216 Portrait</option>
-                  <option value="1024x1536">1024 × 1536 Portrait</option>
-                  <option value="768x1344">768 × 1344 Portrait 9:16</option>
-                  <option value="1216x832">1216 × 832 Landscape</option>
-                  <option value="1536x1024">1536 × 1024 Landscape</option>
-                  <option value="1344x768">1344 × 768 Landscape 16:9</option>
+                  {!presetFor(width, height) && <option value={`${width}x${height}`}>Custom · {width} × {height}</option>}
+                  {(["Square", "Portrait", "Landscape"] as const).map((group) => (
+                    <optgroup key={group} label={group}>
+                      {SIZE_PRESETS.filter((p) => p.group === group).map((p) => (
+                        <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>{p.label} — {p.w} × {p.h}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                  <option disabled value="4k">4K: make Full HD 1080p, then use Enhance ×2</option>
                 </select>
               </label>
               <div>
@@ -1833,6 +2910,7 @@ export default function Home() {
                   />
                 </label>
               </div>
+              <div className="dimension-paper-preview"><div><i style={{aspectRatio:`${width}/${height}`}} /></div><span><b>{width} × {height} px</b><small>{width===height?"Square 1:1":width>height?"Landscape":"Portrait"}</small></span></div>
               <label>
                 Sampler
                 <select
@@ -1840,7 +2918,7 @@ export default function Home() {
                   onChange={(e) => setSampler(e.target.value)}
                 >
                   <option value="res_multistep">Res Multistep (Z-Image)</option>
-                  <option value="er_sde">ER-SDE (Krea-2)</option>
+                  <option value="er_sde">ER-SDE (Krea-2 / MOSS)</option>
                   <option value="euler">Euler</option>
                   <option value="euler_ancestral">Euler a</option>
                   <option value="dpmpp_2m">DPM++ 2M</option>
@@ -1864,9 +2942,16 @@ export default function Home() {
               FLUX.2 Klein Q4 GGUF is the verified compact FLUX workflow for this GPU: 4 steps, CFG 1, and a safe 512px starting size.
             </div>
           )}
+          {isQwenImage21 && (
+            <div className="model-note">
+              {isQwenImage21Gguf
+                ? "Qwen-Image 2.1 UC Q4_K_M GGUF is the compact experimental Qwen option. Start at 1024 × 1024, CFG 1 and 25 Euler steps; the text encoder offloads to keep this 12 GB GPU within memory."
+                : "Qwen-Image 2.1 INT8 uses the official local ComfyUI workflow. Start at 1024 × 1024, CFG 1 and 25 Euler steps; the model and text encoder offload between stages on this 12 GB GPU."}
+            </div>
+          )}
           <div className="generate-row">
             <button className="preset">
-              Preset: {isZImage ? "Z-Image Turbo · 4 steps" : "My Default"}
+              Preset: {isMossImage ? "MOSS Image · INT8 / Qwen3.5 9B" : isZImage ? "Z-Image Turbo · 4 steps" : isQwenImage21 ? (isQwenImage21Gguf ? "Qwen-Image 2.1 UC · Q4 GGUF" : "Qwen-Image 2.1 · INT8") : "My Default"}
             </button>
             <button
               className="generate"
@@ -1880,6 +2965,8 @@ export default function Home() {
                   : engine === "ready"
                     ? isZImage
                       ? "Generate Z-Image"
+                      : isQwenImage21
+                        ? "Generate Qwen-Image 2.1"
                       : isMageFlow
                         ? "Generate Mage-Flow"
                         : isFlux2Klein
@@ -1887,8 +2974,13 @@ export default function Home() {
                           : isFlux
                             ? "Generate Flux"
                       : "Generate"
-                    : "Engine starting…"}
+                    : engine === "failed"
+                      ? "Engine failed — see error"
+                      : "Engine starting…"}
             </button>
+            {engine === "failed" && engineError && (
+              <p className="error-text" role="alert">{engineError}</p>
+            )}
           </div>
         </section>
       </section>
@@ -1906,18 +2998,28 @@ export default function Home() {
                     ? "Image to Image"
                     : toolMode === "inpaint"
                       ? "Inpainting"
-                      : "ControlNet"}
+                      : toolMode === "krea2-reference"
+                        ? "Krea-2 Reference Edit"
+                        : "ControlNet"}
                 </h2>
                 <p>
                   {toolMode === "img2img"
                     ? "Transform an existing image while preserving its composition."
                     : toolMode === "inpaint"
                       ? "Replace only the white areas of a black-and-white mask."
-                      : "Guide Z-Image with Canny edges, depth, or human pose."}
+                      : toolMode === "krea2-reference"
+                        ? "Transform a reference image with your active Krea-2 checkpoint, prompt and optional LoRAs."
+                        : "Guide Z-Image with Canny edges, depth, or human pose."}
                 </p>
               </div>
               <button onClick={() => setToolMode("")}>×</button>
             </header>
+            {toolMode === "krea2-reference" && (
+              <div className="face-note">
+                <b>Active Krea model:</b> {current?.name || checkpoint || "None selected"}
+                {current?.architecture !== "Krea-2" && <span> — choose a Krea-2 checkpoint from Models before running.</span>}
+              </div>
+            )}
             <div className="tool-layout">
               <label className="tool-upload">
                 <b>Source image</b>
@@ -1993,7 +3095,8 @@ export default function Home() {
               disabled={
                 !toolSource ||
                 !!toolJob ||
-                (toolMode === "inpaint" && !toolMask)
+                (toolMode === "inpaint" && !toolMask) ||
+                (toolMode === "krea2-reference" && current?.architecture !== "Krea-2")
               }
               onClick={runImageTool}
             >
@@ -2003,7 +3106,9 @@ export default function Home() {
                   ? "Transform Image"
                   : toolMode === "inpaint"
                     ? "Inpaint Image"
-                    : "Run ControlNet"}
+                    : toolMode === "krea2-reference"
+                      ? "Run Krea-2 Reference Edit"
+                      : "Run ControlNet"}
             </button>
             {toolResult && (
               <div className="face-result">
@@ -2030,12 +3135,12 @@ export default function Home() {
         </div> : <>
         <div className="preview-meta">
           <span>{style}</span>
-          <small>
-            {width} × {height}px
+          <small title={actualSize ? "Real size of the picture shown" : "Size setting for the next picture"}>
+            {actualSize ? describeSize(actualSize.w, actualSize.h) : `${width} × ${height} px (setting)`}
           </small>
         </div>
         <div className="image-frame">
-          <img src={image} alt="Latest Froja generation" onDoubleClick={() => setPreviewZoomOpen(true)} />
+          <img src={image} alt="Latest Froja generation" onLoad={(event) => setActualSize({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })} onDoubleClick={() => setPreviewZoomOpen(true)} />
           {job && (
             <div className="rendering">
               <i />
@@ -2097,10 +3202,16 @@ export default function Home() {
             <header>
               <div>
                 <h2>Froja Relight</h2>
-                <p>Move the light around an existing image with IC-Light.</p>
+                <p>Place up to three lights around your picture in the 3D room, then let IC-Light relight it.</p>
               </div>
               <button onClick={() => setRelightOpen(false)}>×</button>
             </header>
+            {toolMode === "krea2-reference" && (
+              <div className="face-note">
+                <b>Active Krea model:</b> {current?.name || checkpoint || "None selected"}
+                {current?.architecture !== "Krea-2" && <span> — choose a Krea-2 checkpoint from Models before running.</span>}
+              </div>
+            )}
             <div className="tool-layout">
               <label className="tool-upload">
                 <b>Image to relight</b>
@@ -2126,61 +3237,14 @@ export default function Home() {
               )}
             </div>
             <label className="tool-prompt">
-              Lighting description
+              Lighting description (optional — the lights you placed are added automatically)
               <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                value={relightPrompt}
+                onChange={(e) => setRelightPrompt(e.target.value)}
                 placeholder="Warm window light, cinematic shadows, soft rim light…"
               />
             </label>
-            <section className="relight-control">
-              <div className="relight-presets">
-                {["top", "front", "right", "left", "back", "bottom"].map((direction) => (
-                  <button
-                    key={direction}
-                    className={
-                      direction === relightDirection ? "selected" : ""
-                    }
-                    onClick={() => setRelightPreset(direction)}
-                  >
-                    {direction[0].toUpperCase() + direction.slice(1)}
-                  </button>
-                ))}
-              </div>
-              <div
-                className="relight-pad"
-                onPointerDown={(event) => {
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  moveRelightPoint(event);
-                }}
-                onPointerMove={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) moveRelightPoint(event);
-                }}
-              >
-                <span>Hold and drag to change light direction</span>
-                <i className="light-arrow top">⌃</i><i className="light-arrow right">›</i>
-                <i className="light-arrow bottom">⌄</i><i className="light-arrow left">‹</i>
-                <b
-                  className="light-point"
-                  style={{ left: `${relightX * 100}%`, top: `${relightY * 100}%`, background: relightColor }}
-                />
-              </div>
-              <div className="relight-settings-title">Light settings</div>
-              <div className="relight-toggle">
-                <button className={relightQuality === "soft" ? "selected" : ""} onClick={() => setRelightQuality("soft")}>Soft</button>
-                <button className={relightQuality === "hard" ? "selected" : ""} onClick={() => setRelightQuality("hard")}>Hard</button>
-              </div>
-              <label className="relight-setting-row">
-                <span>Brightness</span>
-                <input type="range" min="10" max="100" value={relightBrightness} onChange={(e) => setRelightBrightness(+e.target.value)} />
-                <b>{relightBrightness}%</b>
-              </label>
-              <label className="relight-setting-row color">
-                <span>Color</span>
-                <input type="color" value={relightColor} onChange={(e) => setRelightColor(e.target.value)} />
-                <b>{relightColor.toUpperCase()}</b>
-              </label>
-            </section>
+            <LightStage image={relightSource} lights={relightLights} ambient={relightAmbient} onLights={setRelightLights} onAmbient={setRelightAmbient} />
             <label className="tool-range">
               Relighting strength <b>{relightStrength.toFixed(2)}</b>
               <input
@@ -2286,6 +3350,12 @@ export default function Home() {
                 Inpainting when the surrounding image must remain exact.
               </span>
             </div>
+            {toolMode === "krea2-reference" && (
+              <div className="face-note">
+                <b>Active Krea model:</b> {current?.name || checkpoint || "None selected"}
+                {current?.architecture !== "Krea-2" && <span> — choose a Krea-2 checkpoint from Models before running.</span>}
+              </div>
+            )}
             <div className="tool-layout">
               <label className="tool-upload">
                 <b>Image to edit</b>
@@ -2345,26 +3415,30 @@ export default function Home() {
               Quality steps <b>{joyaiSteps}</b>
               <input
                 type="range"
-                min="8"
-                max="30"
+                min="4"
+                max="20"
                 step="2"
                 value={joyaiSteps}
                 onChange={(e) => setJoyaiSteps(+e.target.value)}
               />
             </label>
             <p className="face-note">
-              Tested on this RTX 4070 Ti: 20 steps took approximately 11 minutes
-              and used nearly all available VRAM and RAM. Do not run another
-              large model at the same time.
+              Safe 12 GB starting point: 4 steps took approximately 19 minutes in the verified low-memory test. Higher settings take longer and can use nearly all available VRAM and RAM. Do not run another large model at the same time.
             </p>
             {error && <div className="error">{error}</div>}
-            <button
-              className="generate face-run"
-              disabled={!joyaiSource || !joyaiInstruction.trim() || !!joyaiJob}
-              onClick={runJoyaiEdit}
-            >
-              {joyaiJob ? `Smart Editing: ${joyaiState}…` : "Run JoyAI Smart Edit"}
-            </button>
+            <div className="joyai-action-bar">
+              <div>
+                <b>{joyaiJob || joyaiSubmitting ? "Smart Edit is active" : "Ready to edit"}</b>
+                <small>{joyaiState}</small>
+              </div>
+              <button
+                className="generate face-run"
+                disabled={!joyaiSource || !joyaiInstruction.trim() || !!joyaiJob || joyaiSubmitting}
+                onClick={runJoyaiEdit}
+              >
+                {joyaiSubmitting ? "Starting JoyAI…" : joyaiJob ? "Smart Edit running…" : "Start Smart Edit"}
+              </button>
+            </div>
             {joyaiResult && (
               <div className="face-result">
                 <h3>Completed Smart Edit</h3>
@@ -2384,7 +3458,7 @@ export default function Home() {
             {navPanel === "home" && <div className="nav-workspace"><div className="nav-stats"><article><b>{counts.checkpoints}</b><small>Checkpoints</small></article><article><b>{counts.loras}</b><small>LoRAs</small></article><article><b>{counts.embeddings || 0}</b><small>Embeddings</small></article><article><b>{engine}</b><small>Image engine</small></article></div><h3>Quick start</h3><button onClick={() => setNavPanel("")}>Create a new image</button><button onClick={() => { setNavPanel(""); setImagePromptOpen(true); }}>Recognize an image and create a prompt</button><button onClick={() => { setNavPanel(""); setEnhanceOpen(true); }}>Enhance an existing image</button></div>}
             {navPanel === "library" && <div className="nav-workspace"><p>Your files remain in their existing folders; Froja only indexes them.</p><button onClick={() => { setNavPanel(""); setModelQuery(""); setModelOpen(true); }}>Checkpoints <b>{counts.checkpoints}</b></button><button onClick={() => { setNavPanel(""); setLoraQuery(""); setLoraOpen(true); }}>LoRA models <b>{counts.loras}</b></button><button onClick={() => setNavPanel("embeddings")}>Embeddings <b>{counts.embeddings || 0}</b></button><button onClick={refreshLibrary}>Refresh all linked folders</button></div>}
             {navPanel === "presets" && <div className="nav-workspace"><p>Save and restore your current prompt, model, style, sampler, dimensions, steps and CFG settings.</p><button onClick={saveCurrentPreset}>Save current settings as My Preset</button><button onClick={loadCurrentPreset}>Load My Preset</button><button onClick={() => { setSteps(28); setCfg(7); setWidth(768); setHeight(768); setSampler("euler"); setMaintenanceState("Balanced defaults applied."); }}>Apply balanced defaults</button></div>}
-            {navPanel === "workflows" && <div className="workflow-grid"><button onClick={() => { setNavPanel(""); setImagePromptOpen(true); }}><b>Image → Prompt</b><small>Understand an image and produce a generation prompt.</small></button><button onClick={() => { setNavPanel(""); openImageTool("img2img"); }}><b>Image → Image</b><small>Recreate or transform an existing image.</small></button><button onClick={() => { setNavPanel(""); openImageTool("inpaint"); }}><b>Inpainting</b><small>Repair a selected area.</small></button><button onClick={() => { setNavPanel(""); setRelightOpen(true); }}><b>IC-Light Relight</b><small>Change the direction and character of light.</small></button><button onClick={() => { setNavPanel(""); setRepairOpen(true); }}><b>Repair Studio</b><small>Correct faces, eyes, hands and local defects.</small></button><button onClick={() => { setNavPanel(""); setJoyaiOpen(true); }}><b>Smart Edit</b><small>Edit an image using natural-language instructions.</small></button></div>}
+            {navPanel === "workflows" && <div className="workflow-grid"><button onClick={() => { setNavPanel(""); setSenseNovaOpen(true); }}><b>SenseNova Q4</b><small>Experimental unified local generation for the 12 GB safety profile.</small></button><button onClick={() => { setNavPanel(""); setImagePromptOpen(true); }}><b>Image → Prompt</b><small>Understand an image and produce a generation prompt.</small></button><button onClick={() => { setNavPanel(""); openImageTool("img2img"); }}><b>Image → Image</b><small>Recreate or transform an existing image.</small></button><button onClick={() => { setNavPanel(""); setReferenceComposerOpen(true); }}><b>Reference Composer</b><small>Combine a character, furniture, room, material and prop into one image.</small></button><button onClick={() => { setNavPanel(""); setSketch3DOpen(true); }}><b>Sketch → 3D Studio</b><small>Convert sketches into dimensional renders, controlled views and mesh-ready assets.</small></button><button onClick={() => { setNavPanel(""); openImageTool("krea2-reference"); }}><b>Krea-2 Reference Edit</b><small>Turn anime, artwork or a reference into a new Krea-2 interpretation.</small></button><button onClick={() => { setNavPanel(""); openImageTool("inpaint"); }}><b>Inpainting</b><small>Repair a selected area.</small></button><button onClick={() => { setNavPanel(""); setRelightOpen(true); }}><b>IC-Light Relight</b><small>Change the direction and character of light.</small></button><button onClick={() => { setNavPanel(""); setRepairOpen(true); }}><b>Repair Studio</b><small>Correct faces, eyes, hands and local defects.</small></button><button onClick={() => { setNavPanel(""); setJoyaiOpen(true); }}><b>Smart Edit</b><small>Edit an image using natural-language instructions.</small></button></div>}
             {navPanel === "embeddings" && <><input className="nav-search" placeholder="Search embeddings…" value={embeddingSearch} onChange={(event) => setEmbeddingSearch(event.target.value)} /><div className="embedding-list">{embeddings.filter((item) => item.name.toLowerCase().includes(embeddingSearch.toLowerCase())).map((item) => <article key={item.path}><div><b>{item.name}</b><small>{item.source} · {(item.size / 1024 / 1024).toFixed(1)} MB</small></div><button onClick={() => { setNegative((value) => [value, `embedding:${item.name.replace(/\.[^.]+$/, "")}`].filter(Boolean).join(", ")); setMaintenanceState(`${item.name} added to the negative prompt.`); }}>Add to negative prompt</button></article>)}</div></>}
             {navPanel === "settings" && <div className="nav-workspace">
               <h3 className="settings-section-title"><Icon name="palette" /> {t("appearance")}</h3>
@@ -2425,7 +3499,7 @@ export default function Home() {
               <button onClick={() => setPreviewZoom(200)}>200%</button>
               <input aria-label="Generated image zoom" type="range" min="50" max="400" step="10" value={previewZoom} onChange={(event) => setPreviewZoom(+event.target.value)} />
               <strong>{previewZoom}%</strong>
-              <button onClick={openOutputFolder}>▣ Open Folder</button>
+              <button onClick={openOutputFolder}>Open Folder</button>
             </div>
             <div className="generated-zoom-canvas">
               <img style={{ width: `${previewZoom}%` }} src={image} alt="Generated image enlarged for detail inspection" />
@@ -2532,7 +3606,7 @@ export default function Home() {
                 </label>
                 <div className="vision-status">
                   <b>Local vision model</b>
-                  <small>Llama Vision recognizes it, then Qwen rewrites the result as a generation prompt · your image stays local</small>
+                  <small>Qwen Vision recognizes it locally, then Qwen rewrites the result as a reusable generation prompt · your image stays on this computer</small>
                   <em>{imagePromptState}</em>
                 </div>
                 <button
@@ -2560,10 +3634,34 @@ export default function Home() {
         </div>
       )}
 
+      {senseNovaOpen && <SenseNovaStudio onClose={()=>setSenseNovaOpen(false)} />}
+      {lladaOpen && <LLaDAStudio onClose={()=>setLladaOpen(false)} />}
+
+      {kreaFastOpen && <KreaFastStudio onClose={()=>setKreaFastOpen(false)} initialPrompt={prompt} />}
+
+      {variationLabOpen && <VariationLab onClose={()=>setVariationLabOpen(false)} checkpoint={checkpoint} architecture={current?.architecture} width={width} height={height} seed={seed} loras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))} />}
+
+      {promptBatchOpen && <PromptBatchStudio onClose={()=>setPromptBatchOpen(false)} checkpoint={checkpoint} architecture={current?.architecture} negative={negative} steps={steps} cfg={cfg} width={width} height={height} sampler={sampler} stylePrompt={styleEnabled ? artStylePrompts[style]||"" : ""} loras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))} />}
+
+      {portraitTransformerOpen && <PortraitTransformer onClose={()=>setPortraitTransformerOpen(false)} models={models.map(item=>({name:item.name,relative:item.relative,architecture:item.architecture}))} loras={loras.map(item=>({name:item.name,relative:item.relative,baseModel:item.base_model,triggers:item.triggers}))} initialCheckpoint={checkpoint} initialLoras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))} styles={artStyleOptions} width={width} height={height} seed={seed} />}
+
+      {sketch3DOpen && <Sketch3DStudio onClose={()=>setSketch3DOpen(false)} />}
+
+      {referenceComposerOpen && <ReferenceComposerStudio
+        onClose={()=>setReferenceComposerOpen(false)}
+        checkpoint={checkpoint}
+        architecture={current?.architecture}
+        initialPrompt={prompt}
+        width={width}
+        height={height}
+        seed={seed}
+        loras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))}
+      />}
+
       {trainingStudioOpen && (
         <div className="modal training-modal" onClick={()=>setTrainingStudioOpen(false)}>
           <div className="training-workspace with-appearance" onClick={event=>event.stopPropagation()}>
-            <header className="training-head"><div><h2>✦ Froja Training Studio</h2><p>Generate eight consistent images in different positions, angles and environments for professional LoRA training.</p></div><span><button onClick={()=>{setTrainingResults([]);setTrainingQueue([]);setTrainingShots(trainingShotOptions[trainingType].map(([name])=>name));setTrainingEnvironments(["Studio"]);setTrainingImagesPerSetup(1);setTrainingSession(`Froja_Training_${Date.now().toString().slice(-5)}`);setTrainingState("New eight-image session ready.");}}>＋ New Session</button><button className="appearance-toggle" onClick={()=>setAppearanceOpen(value=>!value)}>◉ Appearance Extension</button><button className="prompt-cards-toggle" onClick={()=>setPromptCardsOpen(value=>!value)}>▦ Prompt Cards</button><button onClick={()=>setTrainingStudioOpen(false)}>×</button></span></header>
+            <header className="training-head"><div><h2>✦ Froja Training Studio</h2><p>Generate eight consistent images in different positions, angles and environments for professional LoRA training.</p></div><span><button onClick={()=>{setTrainingResults([]);setTrainingQueue([]);setTrainingShots(trainingShotOptions[trainingType].map(([name])=>name));setTrainingEnvironments(["Studio"]);setTrainingImagesPerSetup(1);setTrainingSession(`Froja_Training_${Date.now().toString().slice(-5)}`);setTrainingState("New eight-image session ready.");}}>+ New Session</button><button className="appearance-toggle" onClick={()=>setAppearanceOpen(value=>!value)}>◉ Appearance Extension</button><button className="prompt-cards-toggle" onClick={()=>setPromptCardsOpen(value=>!value)}>▦ Prompt Cards</button><button onClick={()=>setTrainingStudioOpen(false)}>×</button></span></header>
             <aside className="appearance-extension appearance-library">
               <header><h3>Appearance Library</h3></header>
 
@@ -2600,7 +3698,7 @@ export default function Home() {
           </div>
         </div>
       )}
-      {trainingInspectItem&&<div className="training-inspector-modal" onClick={()=>setTrainingInspectId("")}><section className="training-inspector" onClick={event=>event.stopPropagation()}><header><div><h2>{trainingInspectItem.name}</h2><p>{trainingInspectIndex+1} of {trainingResults.length} · {trainingInspectItem.position} · {trainingInspectItem.environment}</p></div><button aria-label="Close image inspector" onClick={()=>setTrainingInspectId("")}>×</button></header><div className="training-inspector-toolbar"><button onClick={()=>setTrainingInspectZoom(value=>Math.max(.25,value-.25))}>−</button><b>{Math.round(trainingInspectZoom*100)}%</b><button onClick={()=>setTrainingInspectZoom(value=>Math.min(4,value+.25))}>＋</button><button onClick={()=>setTrainingInspectZoom(1)}>Fit 100%</button><small>Mouse wheel zoom · scroll to examine details · arrow keys change image</small></div><div className="training-inspector-stage" onWheel={event=>{event.preventDefault();setTrainingInspectZoom(value=>Math.max(.25,Math.min(4,value+(event.deltaY<0?.15:-.15))))}}><img src={trainingInspectItem.image} alt={trainingInspectItem.name+" full quality inspection"} style={{width:(trainingInspectZoom*90)+"%",maxWidth:"none",maxHeight:"none"}}/></div><footer><button onClick={()=>stepTrainingInspection(-1)}>← Previous</button><div><b>{trainingInspectItem.approved?"Approved for dataset":"Awaiting quality review"}</b><p>{trainingInspectItem.prompt}</p></div><button onClick={()=>setTrainingResults(items=>items.map(item=>item.id===trainingInspectItem.id?{...item,approved:!item.approved}:item))}>{trainingInspectItem.approved?"Remove Approval":"Approve Image"}</button><button onClick={()=>stepTrainingInspection(1)}>Next →</button></footer></section></div>}
+      {trainingInspectItem&&<div className="training-inspector-modal" onClick={()=>setTrainingInspectId("")}><section className="training-inspector" onClick={event=>event.stopPropagation()}><header><div><h2>{trainingInspectItem.name}</h2><p>{trainingInspectIndex+1} of {trainingResults.length} · {trainingInspectItem.position} · {trainingInspectItem.environment}</p></div><button aria-label="Close image inspector" onClick={()=>setTrainingInspectId("")}>×</button></header><div className="training-inspector-toolbar"><button onClick={()=>setTrainingInspectZoom(value=>Math.max(.25,value-.25))}>−</button><b>{Math.round(trainingInspectZoom*100)}%</b><button onClick={()=>setTrainingInspectZoom(value=>Math.min(4,value+.25))}>+</button><button onClick={()=>setTrainingInspectZoom(1)}>Fit 100%</button><small>Mouse wheel zoom · scroll to examine details · arrow keys change image</small></div><div className="training-inspector-stage" onWheel={event=>{event.preventDefault();setTrainingInspectZoom(value=>Math.max(.25,Math.min(4,value+(event.deltaY<0?.15:-.15))))}}><img src={trainingInspectItem.image} alt={trainingInspectItem.name+" full quality inspection"} style={{width:(trainingInspectZoom*90)+"%",maxWidth:"none",maxHeight:"none"}}/></div><footer><button onClick={()=>stepTrainingInspection(-1)}>← Previous</button><div><b>{trainingInspectItem.approved?"Approved for dataset":"Awaiting quality review"}</b><p>{trainingInspectItem.prompt}</p></div><button onClick={()=>setTrainingResults(items=>items.map(item=>item.id===trainingInspectItem.id?{...item,approved:!item.approved}:item))}>{trainingInspectItem.approved?"Remove Approval":"Approve Image"}</button><button onClick={()=>stepTrainingInspection(1)}>Next →</button></footer></section></div>}
       {datasetOpen && (
         <div className="modal face-modal" onClick={() => setDatasetOpen(false)}>
           <div className="drawer wide tool-drawer dataset-drawer" onClick={(event) => event.stopPropagation()}>
@@ -2639,6 +3737,12 @@ export default function Home() {
               </div>
               <button onClick={() => setRepairOpen(false)}>×</button>
             </header>
+            {toolMode === "krea2-reference" && (
+              <div className="face-note">
+                <b>Active Krea model:</b> {current?.name || checkpoint || "None selected"}
+                {current?.architecture !== "Krea-2" && <span> — choose a Krea-2 checkpoint from Models before running.</span>}
+              </div>
+            )}
             <div className="tool-layout">
               <div className="tool-upload">
                 <b>Image to inspect and repair</b>
@@ -2765,7 +3869,7 @@ export default function Home() {
                 <p>
                   {models.length} linked models ·{" "}
                   {models.filter((m) => m.preview).length} with previews ·
-                  nothing copied
+                  nothing copied · {pinnedCheckpoints.length} pinned for quick use
                 </p>
               </div>
               <button onClick={() => setModelOpen(false)}>×</button>
@@ -2800,6 +3904,7 @@ export default function Home() {
                     setCheckpoint(m.relative);
                     setModelOpen(false);
                   }}
+                  onContextMenu={(e) => { e.preventDefault(); setContextCheckpoint({ item: m, x: e.clientX, y: e.clientY }); }}
                 >
                   <div className="card-preview">
                     {previewUrl(m) ? (
@@ -2809,12 +3914,16 @@ export default function Home() {
                     )}
                     <i>{checkpoint === m.relative ? "✓" : ""}</i>
                   </div>
+                  <span className={`lora-pin ${pinnedCheckpoints.includes(m.relative) ? "active" : ""}`} role="button" tabIndex={0} title={pinnedCheckpoints.includes(m.relative) ? "Unpin checkpoint" : "Pin checkpoint"} aria-label={pinnedCheckpoints.includes(m.relative) ? `Unpin ${m.name}` : `Pin ${m.name}`} onClick={(event) => { event.stopPropagation(); togglePinnedCheckpoint(m); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); togglePinnedCheckpoint(m); } }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3 6 0-1 5 4 4v2h-5v7l-2-2v-5H6v-2l4-4-1-5Z" /></svg>
+                  </span>
                   <b title={m.name}>
                     {m.name.replace(/\.(safetensors|ckpt|gguf)$/i, "")}
                   </b>
                   <small>
                     {m.architecture} · {m.source}
                   </small>
+                  {pinnedCheckpoints.includes(m.relative) && <span className="favorite-label">Pinned checkpoint</span>}
                   {["Flux2-Klein", "Mage-Flow", "Krea-2"].includes(m.architecture) && m.size < 10 * 1024 ** 3 && (
                     <span className="compact-model-badge">Verified for this 12 GB GPU</span>
                   )}
@@ -2833,7 +3942,7 @@ export default function Home() {
                 <h2>Attach LoRA to Prompt</h2>
                 <p>
                   {loras.length} linked LoRAs · right-click a card for preview
-                  and generation actions
+                  and generation actions · {pinnedLoras.length} favorite{pinnedLoras.length === 1 ? "" : "s"}
                 </p>
               </div>
               <button onClick={() => setLoraOpen(false)}>×</button>
@@ -2880,28 +3989,50 @@ export default function Home() {
             <div className="library-grid">
               {visibleLoras.map((l) => {
                 const chosen = selectedLoras.some((x) => x.path === l.path);
+                const pinned = pinnedLoras.includes(l.relative);
                 return (
                   <button
                     key={l.path}
-                    className={chosen ? "selected" : ""}
+                    className={`${chosen ? "selected " : ""}${pinned ? "pinned" : ""}`.trim()}
                     onClick={() => toggleLora(l)}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setContextLora({ item: l, x: e.clientX, y: e.clientY });
                     }}
                   >
+                    <span
+                      className={`lora-pin ${pinned ? "active" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      title={pinned ? "Remove from My Favorites" : "Pin to My Favorites"}
+                      aria-label={pinned ? `Unpin ${l.name}` : `Pin ${l.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        togglePinnedLora(l);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          togglePinnedLora(l);
+                        }
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3 6 0-1 5 4 4v2h-5v7l-2-2v-5H6v-2l4-4-1-5Z" /></svg>
+                    </span>
                     <div className="card-preview">
                       {previewUrl(l) ? (
                         <img src={previewUrl(l)} alt={`${l.name} LoRA preview`} loading="lazy" />
                       ) : (
                         <span>LoRA</span>
                       )}
-                      <i>{chosen ? "✓" : "＋"}</i>
+                      <i>{chosen ? "✓" : "+"}</i>
                     </div>
                     <b title={l.name}>
                       {l.name.replace(/\.safetensors$/i, "")}
                     </b>
                     <small>{l.base_model || l.source}</small>
+                    {pinned && <span className="favorite-label">My Favorite</span>}
                     {l.triggers?.length ? (
                       <p className="trigger-line">
                         Trigger: {l.triggers.slice(0, 3).join(", ")}
@@ -2916,6 +4047,70 @@ export default function Home() {
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+      {transformOpen && (
+        <div className="modal face-modal" onClick={() => setTransformOpen(false)}>
+          <div className="drawer wide" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <div><h2>Qwen 2.1 Photo &amp; Character Editor</h2><p>Change a face, body, pose, outfit or background using the original plus optional visual references.</p></div>
+              <button onClick={() => setTransformOpen(false)}>×</button>
+            </header>
+            <div className="face-grid">
+              <label>
+                <b>1. Original image</b><small>The primary composition and subject</small>
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => loadFaceFile(event.target.files?.[0], setTransformSource)} />
+                {transformSource ? <img src={transformSource} alt="Original transformation source" /> : <span>Choose the image to transform</span>}
+              </label>
+              <label>
+                <b>2. Face, body, pose, outfit or object reference</b><small>Optional — upload the result you want the changed element to resemble</small>
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => loadFaceFile(event.target.files?.[0], setTransformReference)} />
+                {transformReference ? <img src={transformReference} alt="Transformation reference" /> : <span>Optional reference image</span>}
+              </label>
+              <label>
+                <b>3. Environment reference</b><small>Optional — room, landscape or background to integrate</small>
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => loadFaceFile(event.target.files?.[0], setTransformEnvironment)} />
+                {transformEnvironment ? <img src={transformEnvironment} alt="Environment reference" /> : <span>Optional environment image</span>}
+              </label>
+            </div>
+            <div className="transform-mode-help"><b>Choose one or more edits</b><small>You can combine operations—for example, Change face + Remove background.</small></div>
+            <div className="transform-mode-grid">
+              {([
+                ["face", "Change face", "Use the face or identity from <image2> while preserving the body, pose, clothing, background and lighting in <image1>.", "body, pose, clothing, hands, camera framing, background and lighting"],
+                ["body", "Change body", "Replace the body in <image1> with the body shape and appearance from <image2>, while keeping the original person's recognizable face and identity.", "face identity, facial features, hairstyle, expression, background and lighting"],
+                ["pose", "Change pose", "Change the person's posture and body pose to match <image2>, while preserving their recognizable identity, face, clothing and scene.", "face identity, facial features, clothing, environment and overall photographic style"],
+                ["outfit", "Change outfit", "Put the clothing or outfit from <image2> onto the person in <image1>, fitting it naturally to their body.", "face identity, hairstyle, body shape, pose, background and lighting"],
+                ["background", "Replace background", "Replace the background of <image1> with the environment from <image3>, integrating the subject naturally with correct perspective, light and contact shadows.", "person, face identity, body, pose, clothing and fine subject details"],
+                ["cutout", "Remove background", "Extract the complete foreground subject from <image1>. Remove only the background and preserve clean fine edges around hair and clothing.", "all original subject pixels, face identity, body, pose, clothing, hair and fine edge details"],
+              ] as string[][]).map(([id, label, instruction, preserve], _index, modes) => <button key={id} type="button" className={transformModes.includes(id) ? "selected" : ""} onClick={() => {
+                const next = transformModes.includes(id) ? transformModes.filter(item => item !== id) : [...transformModes, id];
+                setTransformModes(next);
+                setTransformInstruction(next.map(item => modes.find(mode => mode[0] === item)?.[2]).filter(Boolean).join(" "));
+                setTransformPreserve(next.map(item => modes.find(mode => mode[0] === item)?.[3]).filter(Boolean).join("; ") || "everything not explicitly requested to change");
+                setTransformTransparent(next.includes("cutout"));
+              }}><b>{transformModes.includes(id) ? "✓ " : ""}{label}</b><small>{id === "cutout" ? "Transparent PNG" : id === "background" ? "Uses environment reference" : "Uses visual reference"}</small></button>)}
+              <button type="button" className={!transformModes.length ? "selected" : ""} onClick={() => { setTransformModes([]); setTransformTransparent(false); setTransformInstruction(""); }}><b>Custom edit</b><small>Write any instruction</small></button>
+            </div>
+            <label className="face-setting">
+              <b>What should change?</b>
+              <small>Examples: replace the body but keep the face; transform the person into a bronze statue; use the armor from Figure 2.</small>
+              <textarea value={transformInstruction} onChange={(event) => setTransformInstruction(event.target.value)} placeholder="Transform the body into the armored design from Figure 2 while keeping the person's recognizable face…" />
+            </label>
+            <label className="face-setting">
+              <b>What must remain unchanged?</b>
+              <small>Be explicit. Qwen will treat this as the preservation contract.</small>
+              <textarea value={transformPreserve} onChange={(event) => setTransformPreserve(event.target.value)} />
+            </label>
+            <label className="transform-alpha-switch"><span><b>Transparent PNG output</b><small>Keep an alpha channel for cutouts and isolated subjects.</small></span><input type="checkbox" checked={transformTransparent} onChange={(event) => setTransformTransparent(event.target.checked)} /></label>
+            <p className="face-note">The result is one integrated image, never a collage. Extreme transformations can reduce identity fidelity; use Face Studio afterward only if the final face needs correction.</p>
+            <div className="transform-run-bar">
+              {error && <div className="error">{error}</div>}
+              <button className="generate face-run" disabled={!transformSource || !transformInstruction.trim() || !!transformJob} onClick={runCharacterTransform}>
+                {transformJob ? `Transformer: ${transformState}…` : transformModes.length ? `Run ${transformModes.length} selected edit${transformModes.length === 1 ? "" : "s"}` : "Run Custom Edit"}
+              </button>
+            </div>
+            {transformResult && <div className="face-result"><h3>Completed transformation</h3><img src={transformResult} alt="Character transformation result" /><a href={transformResult} download>Open or save result</a></div>}
           </div>
         </div>
       )}
@@ -2939,9 +4134,10 @@ export default function Home() {
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) =>
-                    loadFaceFile(e.target.files?.[0], setFaceSource)
-                  }
+                  onChange={(e) => {
+                    setFaceSourceIndex(0);
+                    loadFaceFile(e.target.files?.[0], setFaceSource);
+                  }}
                 />
                 {faceSource ? (
                   <img src={faceSource} alt="Source face" />
@@ -2955,9 +4151,10 @@ export default function Home() {
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) =>
-                    loadFaceFile(e.target.files?.[0], setFaceTarget)
-                  }
+                  onChange={(e) => {
+                    setFaceTargetIndex(0);
+                    loadFaceFile(e.target.files?.[0], setFaceTarget);
+                  }}
                 />
                 {faceTarget ? (
                   <img src={faceTarget} alt="Target image for face replacement" />
@@ -2966,7 +4163,40 @@ export default function Home() {
                 )}
               </label>
             </div>
-            <label className="face-setting">
+            <div className="face-grid">
+              <label className="face-setting">
+                <b>Method</b>
+                <small>Pose-aware is for profile, tilted, raised or lowered heads.</small>
+                <select value={faceMode} onChange={(event) => setFaceMode(event.target.value as "exact" | "pose")}>
+                  <option value="exact">Exact Face Swap — fast</option>
+                  <option value="pose">Pose-aware Identity — difficult angles</option>
+                </select>
+              </label>
+              <label className="face-setting">
+                <b>How many faces?</b>
+                <small>Choose up to four consecutive faces in the target.</small>
+                <select value={faceCount} onChange={(event) => setFaceCount(Number(event.target.value))} disabled={faceMode === "pose"}>
+                  <option value={1}>One face</option>
+                  <option value={2}>Two faces</option>
+                  <option value={3}>Three faces</option>
+                  <option value={4}>Four faces</option>
+                </select>
+              </label>
+            </div>
+            {faceMode === "exact" && faceCount > 1 && (
+              <label className="face-setting">
+                <b>Multi-face mapping</b>
+                <small>Use one identity for everyone, or map source faces to target faces in order.</small>
+                <select value={faceMapping} onChange={(event) => setFaceMapping(event.target.value as "same" | "matched")}>
+                  <option value="same">Use this source identity for every selected face</option>
+                  <option value="matched">Match source faces to target faces in order</option>
+                </select>
+              </label>
+            )}
+            {faceMode === "pose" && (
+              <p className="face-note">Pose-aware mode regenerates one difficult face while preserving the target head angle and scene. It takes longer than Exact Face Swap.</p>
+            )}
+            {faceMode === "exact" && <label className="face-setting">
               Face restoration
               <select
                 value={faceRestore}
@@ -2977,7 +4207,34 @@ export default function Home() {
                 <option value="GPEN-BFR-512.onnx">GPEN 512</option>
                 <option value="none">No restoration</option>
               </select>
-            </label>
+            </label>}
+            <div className="face-grid">
+              <label className="face-setting">
+                <b>Source identity</b>
+                <small>For a normal single-person picture, leave this on First face.</small>
+                <select value={faceSourceIndex} onChange={(event) => setFaceSourceIndex(Number(event.target.value))}>
+                  <option value={0}>First face (recommended)</option>
+                  <option value={1}>Second face in a group</option>
+                  <option value={2}>Third face in a group</option>
+                  <option value={3}>Fourth face in a group</option>
+                </select>
+              </label>
+              <label className="face-setting">
+                <b>Person to replace</b>
+                <small>For a normal single-person target, leave this on First face.</small>
+                <select value={faceTargetIndex} onChange={(event) => setFaceTargetIndex(Number(event.target.value))}>
+                  <option value={0}>First face (recommended)</option>
+                  <option value={1}>Second face in a group</option>
+                  <option value={2}>Third face in a group</option>
+                  <option value={3}>Fourth face in a group</option>
+                </select>
+              </label>
+            </div>
+            {faceMode === "exact" && <label className="face-setting">
+              <b>Restoration blend: {Math.round(faceVisibility * 100)}%</b>
+              <small>Lower values preserve more of the raw swap; higher values apply more restoration.</small>
+              <input type="range" min="0.1" max="1" step="0.05" value={faceVisibility} onChange={(event) => setFaceVisibility(Number(event.target.value))} />
+            </label>}
             <p className="face-note">
               Use images you own or have permission to edit. Face processing
               stays on this computer.
@@ -2988,7 +4245,7 @@ export default function Home() {
               disabled={!faceSource || !faceTarget || !!faceJob}
               onClick={runFaceSwap}
             >
-              {faceJob ? `Face Studio: ${faceState}…` : "Replace Face"}
+              {faceJob ? `Face Studio: ${faceState}…` : faceMode === "pose" ? "Transfer Identity to This Pose" : faceCount > 1 ? `Replace ${faceCount} Faces` : "Replace Face"}
             </button>
             {faceResult && (
               <div className="face-result">
@@ -2999,6 +4256,58 @@ export default function Home() {
                 </a>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {videoOpen && (
+        <div className="modal video-studio-modal" onClick={() => setVideoOpen(false)}>
+          <div className="drawer video-studio-drawer" onClick={(event) => event.stopPropagation()}>
+            <header><div><h2><Icon name="video" /> Froja Video Studio</h2><p>Private experimental workspace · optimized presets for 12 GB VRAM</p></div><button onClick={() => setVideoOpen(false)}>×</button></header>
+            <div className={`video-engine-banner ${videoEngine.online ? "online" : "offline"}`}>
+              <span /><div><b>{videoEngine.online ? "Private video engine ready" : videoEngine.configured ? "Private video engine offline" : "Private video engine not configured"}</b><small>Separate runtime · your image models remain untouched</small></div><em>PRIVATE</em>
+            </div>
+            <div className="video-mode-tabs">
+              {([['text','Text to Video'],['image','Image to Video'],['edit','Video Edit'],['reference','Audio / Reference']] as const).map(([id,label]) => <button key={id} className={videoMode === id ? "selected" : ""} onClick={() => setVideoMode(id)}>{label}</button>)}
+            </div>
+            <div className="video-workspace">
+              <section className="video-input-panel">
+                {videoMode !== "text" && videoMode !== "reference" && <label className="video-dropzone"><input type="file" accept={videoMode === "image" ? "image/*" : "video/*"} onChange={(event) => videoMode === "image" ? loadFaceFile(event.target.files?.[0], setVideoSource) : loadVideoReferenceFile(event.target.files?.[0])} />{videoSource ? (videoSource.startsWith("data:image") ? <img src={videoSource} alt="Video source" /> : <span>Video loaded into the local editor</span>) : <><Icon name={videoMode === "image" ? "image" : "video"} /><b>Choose {videoMode === "image" ? "a starting image" : "a video to edit"}</b><small>The file stays on this computer.</small></>}</label>}
+                {videoMode === "reference" && <label className="video-dropzone"><input type="file" accept="audio/*" onChange={(event) => { const file=event.target.files?.[0]; if(!file)return; const reader=new FileReader(); reader.onload=()=>setVideoAudio(String(reader.result||"")); reader.readAsDataURL(file); }} />{videoAudio ? <span>Audio reference loaded locally</span> : <><Icon name="video" /><b>Choose narration, music or sound</b><small>WAV, MP3, M4A or OGG</small></>}</label>}
+                <label className="video-prompt"><span>Direction and motion prompt</span><textarea value={videoPrompt} onChange={(event) => setVideoPrompt(event.target.value)} placeholder="Describe the subject movement, camera, lighting, sound and timing…" /></label>
+                {(videoMode === "image" || videoMode === "text") && <label className="video-prompt"><span>Spoken words (optional - local Kokoro voice)</span><textarea value={videoSpeech} onChange={(event) => setVideoSpeech(event.target.value)} placeholder="Type exactly what the person should say. Leave empty for a silent motion video." /></label>}
+                {videoMode === "edit" && <div className="video-editor-grid">
+                  <label><span>Trim start (seconds)</span><input type="number" min="0" step="0.1" value={videoTrimStart} onChange={(e)=>setVideoTrimStart(Number(e.target.value))} /></label>
+                  <label><span>Trim end (0 = complete)</span><input type="number" min="0" step="0.1" value={videoTrimEnd} onChange={(e)=>setVideoTrimEnd(Number(e.target.value))} /></label>
+                  <label><span>Playback speed</span><select value={videoSpeed} onChange={(e)=>setVideoSpeed(Number(e.target.value))}><option value="0.5">0.5x Slow</option><option value="0.75">0.75x</option><option value="1">1x Normal</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2x Fast</option></select></label>
+                  <label><span>Export format</span><select value={videoAspect} onChange={(e)=>setVideoAspect(e.target.value)}><option value="original">Original</option><option value="youtube">YouTube 16:9</option><option value="tiktok">TikTok 9:16</option><option value="instagram">Instagram 1:1</option><option value="facebook">Facebook 16:9</option></select></label>
+                  <label className="editor-audio"><span>Replace or add audio (optional)</span><input type="file" accept="audio/*" onChange={(event)=>{const file=event.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>setVideoAudio(String(reader.result||""));reader.readAsDataURL(file);}} /></label>
+                </div>}
+                <div className="shot-timeline"><header><b>Shot plan</b><small>A simple timeline for the first private version</small></header><div><article><em>01</em><b>Opening frame</b><small>Establish subject and composition</small></article><article><em>02</em><b>Motion</b><small>Apply prompt and camera direction</small></article><article><em>03</em><b>Finish</b><small>Stabilize final frames</small></article></div></div>
+              </section>
+              <aside className="video-controls">
+                <h3>Video model</h3>
+                <button className={videoModel === "ltx2b" ? "selected" : ""} onClick={() => setVideoModel("ltx2b")}><b>LTX Video 2B</b><small>Real multi-frame AI motion · tested on this 12 GB GPU</small></button>
+                <button className={videoModel === "preview" ? "selected" : ""} onClick={() => setVideoModel("preview")}><b>Froja Motion Preview</b><small>Fast camera animation only · not real subject motion</small></button><button className={videoModel === "minimax-h3" ? "selected" : ""} onClick={() => setVideoModel("minimax-h3")}><b>MiniMax H3 · video + sound</b><small>{!minimaxVideo ? "Checking…" : !minimaxVideo.installed ? "Not installed · see the Froja guide" : !minimaxVideo.supported ? minimaxVideo.label : minimaxVideo.enabled ? `On · ${minimaxVideo.label}` : "Optional · switched off · for strong graphics cards"}</small></button>
+                {videoModel === "minimax-h3" && minimaxVideo && (
+                  <div className="minimax-card">
+                    <label className="style-enable-switch"><span>{minimaxVideo.enabled ? "MiniMax H3 is on" : "Switch on MiniMax H3"}</span><input type="checkbox" checked={minimaxVideo.enabled} disabled={!minimaxVideo.installed} onChange={(event) => toggleMinimaxVideo(event.target.checked)} /></label>
+                    <small>{minimaxVideo.label}.</small>
+                    {minimaxVideo.tier === "safe" && <small>On a 12 GB card it uses safe mode: one short clip at a time, small size, about 7 minutes for 3 seconds. Froja frees the picture engines first and stops the video engine afterwards.</small>}
+                    {!minimaxVideo.installed && <small>Missing: {minimaxVideo.missing.join(", ")}. See "Optional: MiniMax H3 video" in the Froja guide (README) for the download links.</small>}
+                    <small>Works for Text to Video and Image to Video.</small>
+                  </div>
+                )}<button onClick={() => setVideoState("MiniMax H3 Reference unavailable — ref2va diffusion model is missing")}><b>MiniMax H3 Reference</b><small>R2V · official workflow installed · diffusion model missing</small></button>
+                <button onClick={() => setVideoState("LTX-2 19B locked — official workflow requires substantially more than 12 GB VRAM")}><b>LTX-2 19B</b><small>Installed · locked on the 12 GB safety profile</small></button>
+                <button onClick={() => setVideoState("LTX-2.3 22B locked — unsafe on the current 12 GB GPU profile")}><b>LTX-2.3 22B</b><small>Installed · locked on the 12 GB safety profile</small></button>
+                <h3>12 GB safety profile</h3>
+                {([['safe','Safe','480p · 4 sec · 6 steps'],['balanced','Balanced','480p · 5 sec · 8 steps'],['experimental','Experimental','480p · 5 sec · 15 steps']] as const).map(([id,name,note]) => <button key={id} className={videoProfile === id ? "selected" : ""} onClick={() => setVideoProfile(id)}><b>{name}</b><small>{note}</small></button>)}
+                <div className="video-safety"><b>Resource guard</b><small>Froja unloads image engines first and allows only one video job. High resolution and long duration remain locked during testing.</small></div>
+                <div className="video-progress"><span><b>{videoState}</b><em>{Math.round(videoProgress * (videoProgress <= 1 ? 100 : 1))}%</em></span><i><u style={{width:`${Math.min(100, videoProgress * (videoProgress <= 1 ? 100 : 1))}%`}} /></i></div>
+                {!videoJob ? <button className="generate video-generate" disabled={videoModel === "minimax-h3" ? !(minimaxVideo?.enabled && minimaxVideo.installed && minimaxVideo.supported && (videoMode === "text" || videoMode === "image")) : (!videoEngine.online || (videoMode === "edit" && !videoSource))} onClick={runPrivateVideo}>{videoMode === "edit" ? "Export Edited Video" : videoSpeech ? "Generate Talking Video" : "Generate Video"}</button> : <button className="video-cancel" onClick={cancelPrivateVideo}>Cancel safely</button>}
+              </aside>
+            </div>
+            {videoResult && <div className="video-result"><video src={videoResult} controls /><a href={videoResult} download>Save completed video</a></div>}
+            {!videoEngine.online && <div className="video-setup-note"><b>Interface ready; private runtime connection pending.</b><span>The button remains safely disabled until the separate WanGP bridge is installed and verified.</span></div>}
           </div>
         </div>
       )}
@@ -3016,7 +4325,7 @@ export default function Home() {
             <small>LoRA actions</small>
           </div>
           <button onClick={() => prepareLora(contextLora.item)}>
-            ＋ Attach to prompt
+            + Attach to prompt
           </button>
           <button onClick={() => prepareLora(contextLora.item)}>
             ✦ Prepare generation
@@ -3025,11 +4334,19 @@ export default function Home() {
             disabled={!hasGenerated}
             onClick={() => setLoraPreview(contextLora.item)}
           >
-            ▧ Use latest image as preview
+            Use latest image as preview
           </button>
           {!hasGenerated && (
             <p>Generate an image first to enable preview assignment.</p>
           )}
+        </div>
+      )}
+      {contextCheckpoint && (
+        <div className="context-menu" style={{ left: Math.min(contextCheckpoint.x, window.innerWidth - 245), top: Math.min(contextCheckpoint.y, window.innerHeight - 145) }} onClick={(e) => e.stopPropagation()}>
+          <div><b>{contextCheckpoint.item.name.replace(/\.(safetensors|ckpt|gguf)$/i, "")}</b><small>Checkpoint actions</small></div>
+          <button onClick={() => { setCheckpoint(contextCheckpoint.item.relative); setModelOpen(false); setContextCheckpoint(null); }}>Use for next generation</button>
+          <button disabled={!hasGenerated} onClick={() => setCheckpointPreview(contextCheckpoint.item)}>Use latest image as preview</button>
+          {!hasGenerated && <p>Generate an image first to enable preview assignment.</p>}
         </div>
       )}
     </main>

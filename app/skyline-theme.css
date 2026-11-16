@@ -1,0 +1,248 @@
+/* Froja "Skyline" skin - porcelain white, brushed silver, pebble buttons, recessed slots, red LEDs.
+   Colours for every existing rule come from skyline-theme.generated.css; this file adds the materials. */
+.studio.theme-skyline {
+  --sk-porcelain: #f4f3ef;
+  --sk-porcelain-2: #e7e6e1;
+  --sk-well: #e9e8e3;
+  --sk-silver-hi: #fbfbfa;
+  --sk-silver: #c6c8cb;
+  --sk-silver-lo: #9a9da1;
+  --sk-ink: #2a2c30;
+  --sk-ink-soft: #686b71;
+  --sk-led: #ff3b2f;
+  --sk-led-glow: rgba(255, 59, 47, .55);
+  --sk-led-text: #ff5146;
+  --sk-accent-ink: #ce2c22;
+  --sk-slot: #1b1c1f;
+  --sk-brushed: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0 2px, rgba(255,255,255,.32) 2px 3px, rgba(0,0,0,.02) 3px 5px);
+  --sk-panel-shadow: 0 0 0 1px rgba(255,255,255,.95) inset, 0 0 0 2px var(--sk-silver), 0 18px 40px rgba(40,42,48,.14), 0 3px 8px rgba(40,42,48,.08);
+  --sk-pebble-shadow: 0 0 0 1px rgba(255,255,255,.9) inset, 0 -2px 5px rgba(0,0,0,.05) inset, 0 0 0 1.5px var(--sk-silver), 0 6px 14px rgba(40,42,48,.16), 0 1px 3px rgba(40,42,48,.10);
+  --sk-well-shadow: inset 0 2px 6px rgba(0,0,0,.13), inset 0 -1px 0 rgba(255,255,255,.9), 0 0 0 1px #d3d4d4;
+  --teal: var(--sk-led) !important;
+  --froja-bg-image: none !important;
+  color: var(--sk-ink) !important;
+  background: radial-gradient(ellipse 90% 70% at 50% 0%, #ffffff 0%, #f1f0ec 45%, #dddcd6 100%) fixed !important;
+}
+.studio.theme-skyline::before, .studio.theme-skyline::after { background: none !important; }
+
+.led, .studio.theme-skyline .sk-led {
+  font-family: "DSEG14 Classic", Consolas, monospace; color: var(--sk-led); letter-spacing: .1em;
+  text-shadow: 0 0 6px var(--sk-led-glow);
+}
+
+/* ---------- Panels: porcelain plates with a silver rim ---------- */
+.studio.theme-skyline :is(.leftbar, .center > header, .prompt-panel, .model-settings, .preview, .rightbar,
+  .style-picker, .model-block, .camera-summary, .engine-box,
+  .sn-studio, .vl-studio, .pbs-studio, .pt-studio, .sketch3d-studio, .reference-composer, .variation-studio,
+  .prompt-cards-studio, .generated-zoom-dialog, .training-inspector-modal, .drawer,
+  .modal > :is(div, section, article, form)) {
+  background: var(--sk-brushed), linear-gradient(165deg, #ffffff 0%, var(--sk-porcelain) 55%, var(--sk-porcelain-2) 100%) !important;
+  border-color: transparent !important;
+  box-shadow: var(--sk-panel-shadow) !important;
+  color: var(--sk-ink) !important;
+}
+.studio.theme-skyline :is(.leftbar, .center > header, .prompt-panel, .model-settings, .preview) { border-radius: 26px !important; }
+.studio.theme-skyline :is(.sn-studio, .vl-studio, .pbs-studio, .pt-studio, .sketch3d-studio, .reference-composer,
+  .variation-studio, .prompt-cards-studio, .modal > :is(div, section, article, form)) { border-radius: 34px !important; }
+
+/* Backdrops behind tool windows: frosted porcelain */
+.studio.theme-skyline :is(.modal, .sn-overlay, .vl-overlay, .pbs-overlay, .pt-overlay, .sketch3d-modal, .reference-composer-modal) {
+  background: rgba(236, 235, 230, .78) !important; backdrop-filter: blur(14px) saturate(1.1) !important;
+}
+
+/* Logo sits in a dark display slot, like the flash box in the reference board */
+.studio.theme-skyline .logo.brand-banner {
+  background: var(--sk-slot) !important; border-radius: 20px !important; padding: 6px !important;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.8), 0 1px 0 #fff, 0 0 0 2px var(--sk-silver) !important;
+}
+.studio.theme-skyline .nav-label { color: var(--sk-ink-soft) !important; letter-spacing: .18em !important; }
+
+/* ---------- Buttons: pebbles ---------- */
+.studio.theme-skyline button:not(:has(img, video, canvas)):not(.tool-deck *):not(.deck-launch):not([class*="swatch"]):not([class*="color"]) {
+  background: linear-gradient(160deg, var(--sk-silver-hi) 0%, var(--sk-porcelain) 50%, var(--sk-porcelain-2) 100%) !important;
+  color: var(--sk-ink) !important;
+  border: 0 !important;
+  box-shadow: var(--sk-pebble-shadow) !important;
+  text-shadow: none !important;
+  transition: transform .14s ease, box-shadow .14s ease, filter .14s ease !important;
+}
+.studio.theme-skyline button:not(:has(img, video, canvas)):not(.tool-deck *):not(.deck-launch):not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.02); }
+.studio.theme-skyline button:not(:has(img, video, canvas)):not(.tool-deck *):not(.deck-launch):not(:disabled):active {
+  transform: translateY(1px) !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.16), 0 0 0 1.5px var(--sk-silver) !important;
+}
+.studio.theme-skyline button:disabled { opacity: .5 !important; }
+.studio.theme-skyline button .ui-icon, .studio.theme-skyline button svg { color: var(--sk-ink) !important; }
+
+/* Selected / on state: pressed into the plate with a red LED marker */
+.studio.theme-skyline :is(button.on, button.active, button.selected, button[aria-pressed="true"], button[aria-selected="true"]) {
+  background: var(--sk-well) !important;
+  box-shadow: inset 0 2px 7px rgba(0,0,0,.18), 0 0 0 1.5px var(--sk-silver), inset 3px 0 0 var(--sk-led) !important;
+  color: #111 !important;
+}
+
+/* Sidebar menu: quieter pebbles */
+.studio.theme-skyline .leftbar nav button { border-radius: 16px !important; margin-bottom: 5px !important; }
+.studio.theme-skyline .leftbar .new-btn { border-radius: 999px !important; }
+
+/* Small counters / badges become LED read-outs in dark slots */
+.studio.theme-skyline :is(.leftbar nav button i, .new-btn kbd, .header-state, .preview-tabs button span, .badge, .pill-count) {
+  background: var(--sk-slot) !important; color: var(--sk-led) !important;
+  font-family: "DSEG14 Classic", Consolas, monospace !important; font-style: normal !important; font-size: 10px !important;
+  letter-spacing: .08em !important; text-shadow: 0 0 6px var(--sk-led-glow) !important;
+  border: 0 !important; border-radius: 999px !important; padding: 4px 9px !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.8), 0 1px 0 #fff !important;
+}
+
+/* Primary actions: dark graphite pill with glowing red text (the "flash box") */
+.studio.theme-skyline :is(.generate-btn, .generate > button, button.primary, button[class*="generate"]) {
+  background: linear-gradient(170deg, #34363a 0%, #1d1e21 60%, #141517 100%) !important;
+  color: var(--sk-led-text) !important; text-shadow: 0 0 8px var(--sk-led-glow) !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset, 0 0 0 2px var(--sk-silver), 0 10px 22px rgba(20,20,24,.35) !important;
+  letter-spacing: .06em !important; font-weight: 700 !important;
+}
+.studio.theme-skyline :is(.generate-btn, button[class*="generate"]) :is(svg, .ui-icon) { color: var(--sk-led-text) !important; }
+
+/* ---------- Inputs: recessed porcelain wells ---------- */
+.studio.theme-skyline :is(input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=color]):not([type=file]), textarea, select) {
+  background: var(--sk-well) !important; color: var(--sk-ink) !important;
+  border: 0 !important; border-radius: 14px !important; box-shadow: var(--sk-well-shadow) !important;
+}
+.studio.theme-skyline :is(input, textarea)::placeholder { color: #8b8e93 !important; }
+.studio.theme-skyline :is(input, textarea, select):focus { outline: 2px solid var(--sk-led-glow) !important; outline-offset: 2px; }
+.studio.theme-skyline option { background: #f4f3ef; color: var(--sk-ink); }
+
+/* ---------- Toggles: aluminium switch with a red LED (after the JUNG LS 1912) ---------- */
+.studio.theme-skyline input[type=checkbox]:not([hidden]) {
+  appearance: none !important; -webkit-appearance: none !important;
+  position: relative; flex: 0 0 auto; width: 40px !important; height: 22px !important; margin: 0 6px 0 0; cursor: pointer;
+  border-radius: 999px !important; background: #d9d9d5 !important; border: 0 !important;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,.25), 0 1px 0 #fff !important; vertical-align: middle;
+  transition: background .2s;
+}
+.studio.theme-skyline input[type=checkbox]:not([hidden])::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #8e9194 0 2.5px, transparent 3px), radial-gradient(circle at 35% 30%, #fff, #e3e4e4 45%, #a9acb0);
+  box-shadow: 0 2px 4px rgba(0,0,0,.3); transition: left .2s ease, background .2s;
+}
+.studio.theme-skyline input[type=checkbox]:not([hidden]):checked { background: #2a2b2e !important; }
+.studio.theme-skyline input[type=checkbox]:not([hidden]):checked::after {
+  left: 20px;
+  background: radial-gradient(circle at 50% 50%, var(--sk-led) 0 3px, transparent 4px), radial-gradient(circle at 35% 30%, #fff, #e3e4e4 45%, #a9acb0);
+  box-shadow: 0 2px 4px rgba(0,0,0,.3), 0 0 8px var(--sk-led-glow);
+}
+.studio.theme-skyline input[type=radio] { accent-color: var(--sk-led); }
+
+/* Custom switches already in Froja (style on/off etc.) */
+.studio.theme-skyline :is(.style-enable-switch, [class*="switch"]) :is(span, i):not(:empty) { color: var(--sk-ink) !important; }
+
+/* ---------- Sliders: recessed slot + silver pebble knob with LED dot ---------- */
+.studio.theme-skyline input[type=range] {
+  -webkit-appearance: none !important; appearance: none !important; height: 8px !important; border-radius: 999px !important;
+  background: #d6d6d2 !important; box-shadow: inset 0 2px 4px rgba(0,0,0,.25), 0 1px 0 #fff !important; border: 0 !important;
+}
+.studio.theme-skyline input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none !important; width: 22px !important; height: 22px !important; border-radius: 50% !important; border: 0 !important;
+  background: radial-gradient(circle at 50% 50%, var(--sk-led) 0 2.5px, transparent 3.5px), radial-gradient(circle at 35% 30%, #fff, #e6e7e7 45%, #a5a8ac) !important;
+  box-shadow: 0 0 0 1px #b7babd, 0 3px 6px rgba(0,0,0,.3) !important;
+}
+.studio.theme-skyline input[type=range]::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%; border: 0;
+  background: radial-gradient(circle at 35% 30%, #fff, #e6e7e7 45%, #a5a8ac); box-shadow: 0 0 0 1px #b7babd, 0 3px 6px rgba(0,0,0,.3);
+}
+
+/* Theme picker in the header */
+.studio.theme-skyline .steel-theme-toggle { background: linear-gradient(160deg, #fff, #ecebe7) !important; box-shadow: var(--sk-pebble-shadow) !important; border-radius: 999px !important; }
+
+/* Images keep their own colours; give them soft studio shadows */
+.studio.theme-skyline .preview img { border-radius: 18px; box-shadow: 0 14px 30px rgba(40,42,48,.22); }
+
+/* Scrollbars */
+.studio.theme-skyline ::-webkit-scrollbar { width: 10px; height: 10px; }
+.studio.theme-skyline ::-webkit-scrollbar-track { background: transparent; }
+.studio.theme-skyline ::-webkit-scrollbar-thumb { background: linear-gradient(90deg, #d5d6d6, #b5b8bb); border-radius: 999px; border: 2px solid #f1f0ec; }
+
+/* ---------- Fixes after the first screenshots ---------- */
+html:has(.studio.theme-skyline), html:has(.studio.theme-skyline) body, html:has(.studio.theme-skyline) #root { background: #e9e8e3 !important; }
+.studio.theme-skyline.has-custom-background, .studio.theme-skyline.theme-skyline {
+  background: radial-gradient(ellipse 90% 70% at 50% 0%, #ffffff 0%, #f1f0ec 45%, #dddcd6 100%) fixed !important;
+}
+
+/* Existing switches move their knob with transform; use our own movement instead */
+.studio.theme-skyline input[type=checkbox]:not([hidden])::after { transform: none !important; border: 0 !important; }
+.studio.theme-skyline .style-enable-switch > span { color: var(--sk-ink) !important; }
+
+/* Selected / on states must beat the general pebble rule */
+.studio.theme-skyline.theme-skyline.theme-skyline.theme-skyline :is(.on, .active, .selected, [aria-pressed="true"], [aria-selected="true"]):not(.tool-deck *) {
+  background: var(--sk-well) !important;
+  box-shadow: inset 0 2px 7px rgba(0,0,0,.16), 0 0 0 1.5px var(--sk-silver), inset 4px 0 0 var(--sk-led) !important;
+  color: #111 !important;
+}
+
+/* Main actions: the dark "flash box" pill with red LED text */
+.studio.theme-skyline.theme-skyline.theme-skyline.theme-skyline :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button) {
+  background: linear-gradient(170deg, #36383c 0%, #1e1f22 60%, #141517 100%) !important;
+  color: var(--sk-led-text) !important; text-shadow: 0 0 8px var(--sk-led-glow) !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset, 0 0 0 2px var(--sk-silver), 0 10px 22px rgba(20,20,24,.32) !important;
+  letter-spacing: .06em !important; font-weight: 700 !important;
+}
+.studio.theme-skyline.theme-skyline.theme-skyline.theme-skyline :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button):disabled {
+  opacity: 1 !important; color: #7c6f6d !important; text-shadow: none !important; filter: saturate(.4);
+}
+.studio.theme-skyline :is(.generate-btn, .generate, .primary, .vl-generate, .pt-generate, .sn-action button) :is(svg, .ui-icon) { color: var(--sk-led-text) !important; }
+
+/* Keyboard hint and LED badges should not wrap */
+.studio.theme-skyline .new-btn kbd { white-space: nowrap !important; }
+
+/* ---------- LED colour choice: red (default) or ice blue ---------- */
+.studio.led-blue { --sk-led: #2fc6ff; --sk-led-glow: rgba(47, 198, 255, .6); --sk-led-text: #63d8ff; --sk-accent-ink: #0f7fb3; }
+.studio.theme-skyline.led-blue { --teal: #2fc6ff !important; }
+.studio.led-blue .tool-deck { --sk-led: #2fc6ff; --sk-led-glow: rgba(47, 198, 255, .6); }
+
+/* ---------- Main actions: brushed-aluminium push button with a glowing LED ring ---------- */
+.studio.theme-skyline.theme-skyline.theme-skyline.theme-skyline :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button) {
+  position: relative;
+  color: #1f2124 !important; text-shadow: 0 1px 0 rgba(255,255,255,.8) !important;
+  background:
+    radial-gradient(ellipse 120% 160% at 30% 0%, rgba(255,255,255,.95) 0%, rgba(255,255,255,0) 55%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0) 0 1px, rgba(255,255,255,.45) 1px 2px, rgba(0,0,0,.035) 2px 3px),
+    linear-gradient(180deg, #f2f3f4 0%, #c9ccd0 48%, #e4e6e8 100%) !important;
+  border: 0 !important; border-radius: 999px !important;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.9) inset,
+    0 0 0 3px var(--sk-led),
+    0 0 14px 2px var(--sk-led-glow),
+    0 0 0 5px #b9bcc0,
+    0 0 0 6px #f4f4f2,
+    0 12px 24px rgba(30,32,36,.28) !important;
+}
+.studio.theme-skyline.theme-skyline.theme-skyline.theme-skyline :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button):not(:disabled):hover {
+  box-shadow: 0 0 0 1px rgba(255,255,255,.9) inset, 0 0 0 3px var(--sk-led), 0 0 22px 4px var(--sk-led-glow),
+    0 0 0 5px #b9bcc0, 0 0 0 6px #f4f4f2, 0 14px 28px rgba(30,32,36,.3) !important;
+}
+.studio.theme-skyline.theme-skyline.theme-skyline.theme-skyline :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button):not(:disabled):active {
+  transform: translateY(1px) scale(.99) !important;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.2), 0 0 0 3px var(--sk-led), 0 0 26px 6px var(--sk-led-glow), 0 0 0 5px #b9bcc0 !important;
+}
+/* Switched off (disabled): ring goes dark, like an unlit LED */
+.studio.theme-skyline.theme-skyline.theme-skyline.theme-skyline :is(.generate-btn, .generate, .primary, .pbs-run, .tool-run,
+  .training-run, .vl-generate, .pt-generate, .sn-action button):is(button):disabled {
+  color: #8a8d91 !important; filter: none !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.9) inset, 0 0 0 3px #8f9296, 0 0 0 5px #b9bcc0, 0 0 0 6px #f4f4f2, 0 8px 16px rgba(30,32,36,.18) !important;
+}
+.studio.theme-skyline :is(.generate, .primary, .vl-generate, .pt-generate, .sn-action button, .generate-btn) :is(svg, .ui-icon) { color: #1f2124 !important; }
+
+/* LED colour picker in the header */
+.led-picker { display: inline-flex; gap: 6px; align-items: center; margin-left: 8px; }
+.led-picker button { width: 22px !important; height: 22px !important; min-width: 0 !important; padding: 0 !important; border-radius: 50% !important; border: 0 !important; cursor: pointer;
+  box-shadow: 0 0 0 2px #c6c8cb, 0 2px 4px rgba(0,0,0,.25) !important; }
+.led-picker button.led-red { background: radial-gradient(circle at 40% 35%, #ffb0a8, #ff3b2f 60%, #9e1810) !important; }
+.led-picker button.led-blue { background: radial-gradient(circle at 40% 35%, #c8f1ff, #2fc6ff 60%, #0b6e99) !important; }
+.led-picker button.picked { box-shadow: 0 0 0 2px #2a2c30, 0 0 10px 2px var(--sk-led-glow) !important; }
+.studio.theme-skyline .leftbar nav button i { white-space: nowrap !important; flex-shrink: 0; }
+.studio.led-blue .deck-launch .deck-led-mini { color: var(--sk-led) !important; text-shadow: 0 0 6px var(--sk-led-glow) !important; }

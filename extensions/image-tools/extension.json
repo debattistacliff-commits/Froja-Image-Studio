@@ -5,6 +5,6 @@
   "type": "image-workflows",
   "enabled": true,
   "local": true,
-  "engine": "comfyui-extension:9001",
+  "engine": "comfyui-extension:9061",
   "capabilities": ["image-to-image", "inpainting", "controlnet-canny", "controlnet-depth", "controlnet-pose"]
 }

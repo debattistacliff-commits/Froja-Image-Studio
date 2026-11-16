@@ -18,5 +18,5 @@ if [ ! -f dist/index.html ]; then npm run build; fi
 PYTHON="python3"
 if [ -x .venv/bin/python ]; then PYTHON=".venv/bin/python"; fi
 
-(sleep 2; command -v xdg-open >/dev/null 2>&1 && xdg-open http://127.0.0.1:3210 >/dev/null 2>&1 || true) &
+(sleep 2; command -v xdg-open >/dev/null 2>&1 && xdg-open http://127.0.0.1:3310 >/dev/null 2>&1 || true) &
 exec "$PYTHON" backend.py

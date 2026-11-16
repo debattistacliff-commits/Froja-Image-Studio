@@ -4,6 +4,9 @@
   "extension_comfy_url": "http://127.0.0.1:9001",
   "joyai_root": "C:/AI/ComfyUI_JoyAI",
   "joyai_url": "http://127.0.0.1:9002",
+  "wangp_enabled": false,
+  "wangp_root": "C:/AI/WanGP-Private",
+  "wangp_url": "http://127.0.0.1:9010",
   "ollama_url": "http://127.0.0.1:11434",
   "extra_model_paths_config": "C:/AI/ComfyUI/extra_model_paths.yaml",
   "model_roots": {

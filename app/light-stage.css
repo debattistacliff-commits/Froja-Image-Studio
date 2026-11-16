@@ -1,0 +1,89 @@
+/* Relight light stage: a small 3D studio room, a live preview and the light controls. */
+.light-stage {
+  display: grid; grid-template-columns: minmax(300px, 1.15fr) minmax(260px, 1fr) minmax(260px, .9fr); gap: 16px; margin: 12px 0;
+  --stage-led: var(--sk-led, #2fc6ff);
+}
+@media (max-width: 1250px) { .light-stage { grid-template-columns: 1fr 1fr; } .ls-controls { grid-column: 1 / -1; } }
+
+/* ---- the 3D room ---- */
+.ls-room { position: relative; height: 420px; border-radius: 24px; overflow: hidden; perspective: 900px; perspective-origin: 50% 20%;
+  background: radial-gradient(ellipse 80% 60% at 50% 30%, #23262b 0%, #111214 70%), #0b0c0d;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.06); user-select: none; }
+.ls-wall { position: absolute; inset: 0 0 45% 0;
+  background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 46px); }
+.ls-plate { position: absolute; left: 50%; top: 56%; width: 330px; height: 330px; margin: -165px 0 0 -165px; border-radius: 50%;
+  transform: rotateX(64deg); transform-style: preserve-3d; cursor: crosshair; touch-action: none;
+  background: radial-gradient(circle, rgba(255,255,255,.07) 0 1px, transparent 1.5px) 0 0 / 22px 22px,
+    radial-gradient(circle at 50% 50%, #26292e 0%, #17191c 62%, #0e0f11 100%);
+  box-shadow: 0 0 0 2px #2c2f34, 0 0 0 3px var(--stage-led), 0 0 30px -4px var(--stage-led), inset 0 0 40px rgba(0,0,0,.8); }
+.ls-plate::before { content: ""; position: absolute; inset: 12%; border-radius: 50%; border: 1px dashed rgba(255,255,255,.12); }
+.ls-mark { position: absolute; font-size: 10px; letter-spacing: .2em; color: #6f757c; transform: rotateX(-64deg); pointer-events: none; }
+.ls-mark.front { bottom: -4px; left: 50%; margin-left: -28px; color: #9aa0a7; }
+.ls-mark.back { top: -16px; left: 50%; margin-left: -16px; }
+.ls-mark.left { left: -40px; top: 50%; } .ls-mark.right { right: -46px; top: 50%; }
+
+.ls-subject { position: absolute; left: 50%; top: 50%; width: 92px; height: 120px; margin-left: -46px; margin-top: -120px;
+  transform-origin: 50% 100%; transform: rotateX(-64deg); border-radius: 10px; overflow: hidden; pointer-events: none;
+  background: #1b1d20; box-shadow: 0 0 0 2px #2f3237, 0 18px 30px rgba(0,0,0,.6); display: grid; place-items: center; }
+.ls-subject img { width: 100%; height: 100%; object-fit: cover; }
+.ls-subject span { font-size: 10px; color: #8a9198; text-align: center; padding: 6px; }
+
+.ls-lamp { position: absolute; width: 0; height: 0; transform-style: preserve-3d; cursor: grab; }
+.ls-stand { position: absolute; left: -1px; bottom: 0; width: 2px; height: var(--h); transform-origin: 50% 100%; transform: rotateX(-90deg);
+  background: linear-gradient(0deg, rgba(255,255,255,.08), rgba(255,255,255,.35)); }
+.ls-bulb { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  transform: translateZ(var(--h)) rotateX(-64deg); font-style: normal;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, var(--lamp) 45%, color-mix(in srgb, var(--lamp) 40%, #000) 100%);
+  box-shadow: 0 0 0 2px #0b0c0d, 0 0 18px 4px color-mix(in srgb, var(--lamp) 70%, transparent), 0 0 46px 10px color-mix(in srgb, var(--lamp) 30%, transparent); }
+.ls-bulb em { font-style: normal; font-size: 12px; font-weight: 800; color: #111; }
+.ls-lamp.off .ls-bulb { background: radial-gradient(circle at 40% 35%, #5a5e64, #25282c); box-shadow: 0 0 0 2px #0b0c0d; }
+.ls-lamp.off .ls-bulb em { color: #c9ccd0; }
+.ls-lamp.picked .ls-bulb { outline: 2px solid var(--stage-led); outline-offset: 3px; }
+.ls-help { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; color: #8a9198; }
+
+/* ---- live preview ---- */
+.ls-preview { display: grid; gap: 10px; align-content: start; }
+.ls-photo { position: relative; aspect-ratio: 1 / 1; border-radius: 22px; overflow: hidden; background: #0b0c0d; display: grid; place-items: center;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.06); }
+.ls-photo > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ls-photo .ls-shade { mix-blend-mode: multiply; opacity: .72; }
+.ls-photo .ls-glow { mix-blend-mode: screen; opacity: .3; }
+.ls-photo span { color: #8a9198; font-size: 13px; }
+.ls-map { display: flex; align-items: center; gap: 10px; }
+.ls-map img { width: 56px; height: 56px; border-radius: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,.1); }
+.ls-map small { color: #8a9198; font-size: 11px; }
+
+/* ---- controls ---- */
+.ls-controls { display: grid; gap: 10px; align-content: start; padding: 14px; border-radius: 22px; background: #0d0e10;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+.ls-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.ls-presets button { padding: 6px 12px !important; font-size: 12px; border-radius: 999px !important; }
+.ls-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ls-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px !important; font-weight: 650; }
+.ls-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.ls-onoff { justify-content: space-between; }
+.ls-where { margin: 0; font-size: 13px; color: #9aa0a7; }
+.ls-where b { color: var(--sk-led-hot, #b9efff); }
+.ls-row { display: grid; grid-template-columns: 78px 1fr 48px; align-items: center; gap: 10px; font-size: 13px; }
+.ls-row > span { color: #9aa0a7; }
+.ls-row > b { text-align: right; font-family: "DSEG14 Classic", Consolas, monospace; font-size: 11px; color: var(--sk-led, #2fc6ff); }
+.ls-toggle { display: flex; gap: 6px; grid-column: 2 / 4; }
+.ls-toggle button { flex: 1; padding: 6px !important; }
+.ls-colours { display: flex; gap: 6px; align-items: center; grid-column: 2 / 4; flex-wrap: wrap; }
+.ls-swatch { width: 22px !important; height: 22px !important; min-width: 0 !important; padding: 0 !important; border-radius: 50% !important; border: 0 !important;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6) !important; cursor: pointer; }
+.ls-swatch.picked { box-shadow: 0 0 0 2px #e7e9ec, 0 0 10px rgba(255,255,255,.5) !important; }
+.ls-colours input[type=color] { width: 30px; height: 24px; border: 0; background: none; padding: 0; }
+
+/* Relight window: picture chooser (compact) and the 3D room first, the rest below */
+.relight-drawer { display: flex !important; flex-direction: column; }
+.relight-drawer > * { order: 5; }
+.relight-drawer > header { order: 0; }
+.relight-drawer > .tool-layout { order: 1; }
+.relight-drawer > .light-stage { order: 2; }
+.relight-drawer > .tool-prompt { order: 3; }
+.relight-drawer > .tool-layout .tool-upload { min-height: 0 !important; }
+.relight-drawer > .tool-layout .tool-upload img { max-height: 150px; object-fit: contain; }
+.relight-drawer > .tool-layout .tool-upload > span { min-height: 60px !important; }
+.relight-drawer > .tool-layout .relight-after img { max-height: 420px; }
