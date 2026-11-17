@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 import base64
 import io
 import mimetypes
@@ -1871,7 +1872,16 @@ def enhance_image(payload: dict) -> dict:
     }
 
 
+_COMFY_START_LOCK = threading.Lock()
+
+
 def start_comfy() -> bool:
+    """Start the main engine once, even if several requests ask at the same moment."""
+    with _COMFY_START_LOCK:
+        return _start_comfy_locked()
+
+
+def _start_comfy_locked() -> bool:
     global comfy_process, comfy_start_error, COMFY_URL
     comfy_start_error = ""
     if comfy_ready():
@@ -2585,6 +2595,292 @@ def build_workflow(payload: dict) -> dict:
     return workflow
 
 
+
+# Workflow Builder keeps saved graphs separate from generation outputs.
+_WORKFLOW_INFO: dict = {"at": 0.0, "url": "", "data": {}}
+_WORKFLOW_INFO_LOCK = threading.Lock()
+
+
+WORKFLOW_LIBRARY = ROOT / "workflows" / "my-workflows"
+library_lock = threading.Lock()
+civitai_scan_lock = threading.Lock()
+civitai_progress = {"running": False, "done": 0, "total": 0, "found": 0, "current": ""}
+
+
+def library_folder(name):
+    if not isinstance(name, str) or not name or len(name) > 120 or name in {".", ".."} or re.search(r'[<>:"/\\|?*\x00-\x1f]', name) or name.endswith((".", " ")):
+        raise ValueError("Invalid workflow name")
+    path = WORKFLOW_LIBRARY / name
+    if path.is_symlink() or not path.resolve().is_relative_to(WORKFLOW_LIBRARY.resolve()):
+        raise ValueError("Invalid workflow folder")
+    return path
+
+
+def save_library(name, identifier, api, ui, plan, sample, pack):
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(name or "Untitled workflow")).strip().rstrip(". ")[:95] or "Untitled workflow"
+    if name.split(".")[0].upper() in {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(10)], *[f"LPT{i}" for i in range(10)]}:
+        name = "_" + name
+    with library_lock:
+        WORKFLOW_LIBRARY.mkdir(parents=True, exist_ok=True)
+        base, number = name, 2
+        while library_folder(name).exists():
+            name = f"{base} ({number})"
+            number += 1
+        folder = library_folder(name)
+        folder.mkdir()
+        try:
+            checkpoint = next((node.get("inputs", {}).get("ckpt_name", "") for node in api.values() if node.get("inputs", {}).get("ckpt_name")), "")
+            info = {"name": name, "created": datetime.now(timezone.utc).isoformat(), "checkpoint": checkpoint, "prompt": str(plan.get("prompt", ""))[:300], "id": identifier}
+            for filename, value in (("workflow_ui.json", ui), ("workflow_api.json", api), ("plan.json", plan), ("info.json", info)):
+                (folder / filename).write_text(json.dumps(value, indent=2), encoding="utf-8", newline="\n")
+            (folder / (name + ".zip")).write_bytes(pack)
+            if sample:
+                (folder / "sample.png").write_bytes(sample)
+        except Exception:
+            shutil.rmtree(folder)
+            raise
+
+
+def library_items():
+    items = []
+    if WORKFLOW_LIBRARY.exists():
+        for folder in WORKFLOW_LIBRARY.iterdir():
+            try:
+                folder = library_folder(folder.name)
+                info = json.loads((folder / "info.json").read_text(encoding="utf-8"))
+                url = "/api/workflow-builder/library-file/" + urllib.parse.quote(folder.name, safe="") + "/"
+                items.append({**{k: info.get(k, "") for k in ("name", "created", "checkpoint", "prompt")}, "name": folder.name, "has_sample": (folder / "sample.png").is_file(), "sample": url + "sample.png", "zip": url + urllib.parse.quote(folder.name + ".zip", safe="")})
+            except (OSError, ValueError):
+                continue
+    return {"folder": "workflows/my-workflows", "items": sorted(items, key=lambda x: x["created"], reverse=True)}
+
+
+def civitai_info(kind, relative):
+    import civitai
+    config = load_local_config()
+    if config.get("civitai_enabled") is not True:
+        raise PermissionError("Civitai link is off")
+    if kind not in {"loras", "checkpoints"}:
+        raise ValueError("Invalid model kind")
+    item = next((m for m in scan_models(kind) if m["relative"] == relative), None)
+    if not item:
+        raise FileNotFoundError("Model not found")
+    return civitai.lookup(civitai.sha256(item["path"]), config.get("civitai_api_key", ""))
+
+
+def run_civitai_scan(items):
+    try:
+        for item in items:
+            with civitai_scan_lock:
+                civitai_progress["current"] = item["relative"]
+            try:
+                found = civitai_info("loras", item["relative"]).get("found", False)
+            except PermissionError:
+                break
+            except Exception:
+                found = False
+            with civitai_scan_lock:
+                civitai_progress["done"] += 1
+                civitai_progress["found"] += int(found)
+    finally:
+        with civitai_scan_lock:
+            civitai_progress.update(running=False, current="")
+
+
+def serve_cached_file(handler, path):
+    data = path.read_bytes()
+    handler.send_response(200)
+    handler.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+    handler.send_header("Content-Length", str(len(data)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.end_headers()
+    handler.wfile.write(data)
+
+
+def optional_routes(handler, method, parsed, query):
+    import civitai
+    route = parsed.path
+    if not (route.startswith("/api/civitai") or route.startswith("/api/workflow-builder/library")):
+        return False
+    try:
+        if method == "GET" and route == "/api/workflow-builder/library":
+            json_response(handler, library_items())
+        elif method == "GET" and route.startswith("/api/workflow-builder/library-file/"):
+            parts = route[len("/api/workflow-builder/library-file/"):].split("/")
+            if len(parts) != 2:
+                raise ValueError("Invalid library file")
+            name, filename = map(urllib.parse.unquote, parts)
+            folder = library_folder(name)
+            if filename not in {"sample.png", "workflow_ui.json", name + ".zip"}:
+                raise ValueError("Invalid library file")
+            target = folder / filename
+            if target.is_symlink() or not target.resolve().is_relative_to(folder.resolve()):
+                raise ValueError("Invalid library file")
+            serve_cached_file(handler, target)
+        elif method == "POST" and route == "/api/workflow-builder/library/open":
+            WORKFLOW_LIBRARY.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(WORKFLOW_LIBRARY))
+            json_response(handler, {"ok": True})
+        elif method == "POST" and route == "/api/workflow-builder/library/delete":
+            folder = library_folder(read_json_body(handler).get("name"))
+            with library_lock:
+                shutil.rmtree(folder)
+            json_response(handler, {"ok": True})
+        elif route == "/api/civitai/settings":
+            if method == "POST":
+                body = read_json_body(handler)
+                civitai.write_settings(Path(os.environ.get("FROJA_CONFIG", ROOT / "config/config.local.json")), body.get("enabled"), body.get("api_key"))
+            config = load_local_config()
+            json_response(handler, {"enabled": config.get("civitai_enabled") is True, "has_key": bool(config.get("civitai_api_key"))})
+        elif method == "GET" and route == "/api/civitai/info":
+            json_response(handler, civitai_info(query.get("kind", [""])[0], query.get("relative", [""])[0]))
+        elif route == "/api/civitai/scan":
+            if method == "POST":
+                if load_local_config().get("civitai_enabled") is not True:
+                    raise PermissionError("Civitai link is off")
+                if read_json_body(handler).get("kind") != "loras":
+                    raise ValueError("Only LoRAs can be scanned")
+                with civitai_scan_lock:
+                    if not civitai_progress["running"]:
+                        items = [m for m in scan_models("loras") if Path(m["path"]).stat().st_size <= 4 * 1024**3]
+                        civitai_progress.update(running=True, done=0, total=len(items), found=0, current="")
+                        threading.Thread(target=run_civitai_scan, args=(items,), daemon=True).start()
+            with civitai_scan_lock:
+                progress = dict(civitai_progress)
+            json_response(handler, progress)
+        elif method == "GET" and route.startswith("/api/civitai-preview/"):
+            parts = route[len("/api/civitai-preview/"):].split("/")
+            if len(parts) != 2:
+                raise ValueError("Invalid preview path")
+            serve_cached_file(handler, civitai.preview_path(*parts))
+        else:
+            json_response(handler, {"error": "Not found"}, 404)
+    except PermissionError:
+        json_response(handler, {"error": "Civitai link is off"}, 403)
+    except FileNotFoundError:
+        json_response(handler, {"error": "File not found"}, 404)
+    except (ValueError, TypeError, AttributeError):
+        json_response(handler, {"error": "Invalid request"}, 400)
+    except civitai.RegionBlocked as exc:
+        json_response(handler, {"error": str(exc), "code": "REGION_BLOCKED"}, 451)
+    except RuntimeError as exc:  # plain-English messages from civitai.py
+        json_response(handler, {"error": str(exc)}, 502)
+    except Exception:
+        json_response(handler, {"error": "The request could not finish. Please try again."}, 500)
+    return True
+
+
+def workflow_builder_info() -> dict:
+    with _WORKFLOW_INFO_LOCK:
+        if (_WORKFLOW_INFO["url"] != COMFY_URL or
+                time.monotonic() - _WORKFLOW_INFO["at"] >= 600 or not _WORKFLOW_INFO["data"]):
+            data = comfy_request("/object_info", timeout=30)
+            _WORKFLOW_INFO.update(at=time.monotonic(), url=COMFY_URL, data=data)
+        return _WORKFLOW_INFO["data"]
+
+
+def workflow_builder_folder(identifier: str) -> Path:
+    if not isinstance(identifier, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", identifier):
+        raise ValueError("Invalid workflow id; use letters, numbers, underscores or hyphens.")
+    folder = OUTPUTS / "workflow-builder" / identifier
+    if not folder.is_dir():
+        raise FileNotFoundError("Saved workflow was not found.")
+    return folder
+
+
+def workflow_builder_models(api: dict) -> list[dict]:
+    fields = {"ckpt_name": ("checkpoint", "checkpoints"), "unet_name": ("unet", "checkpoints"),
+              "clip_name": ("clip", "clip"), "clip_name1": ("clip", "clip"),
+              "clip_name2": ("clip", "clip"), "clip_name3": ("clip", "clip"),
+              "vae_name": ("vae", "vae"), "lora_name": ("lora", "loras")}
+    models = {}
+    for node in api.values():
+        for field, name in node.get("inputs", {}).items():
+            if field not in fields or not isinstance(name, str):
+                continue
+            kind, scan_kind = fields[field]
+            found = next((m for m in scan_models(scan_kind) if m["relative"] == name), None)
+            size = found["size"] if found else 0
+            # Auxiliary encoders are not part of the checkpoint inventory.
+            if not found:
+                folders = {"clip": ["clip", "text_encoders"], "unet": ["unet", "diffusion_models"]}.get(kind, [scan_kind])
+                for directory in folders:
+                    root = (COMFY_ROOT / "models" / directory).resolve()
+                    candidate = (root / name.replace("\\", "/")).resolve()
+                    if candidate.is_relative_to(root) and candidate.is_file():
+                        size = candidate.stat().st_size
+                        break
+            models[(kind, name)] = {"kind": kind, "relative": name, "size": size}
+    return list(models.values())
+
+
+def workflow_builder_post(handler: SimpleHTTPRequestHandler, action: str) -> None:
+    from workflow_builder import api_to_ui, validate_api, make_pack
+    try:
+        payload = read_json_body(handler)
+        if not isinstance(payload, dict):
+            raise ValueError("Expected a JSON object.")
+        if action == "build":
+            if not comfy_ready() and not start_comfy():
+                return json_response(handler, {"error": comfy_start_error or "Image engine is offline."}, 503)
+            selected = str(payload.get("checkpoint", ""))
+            known = next((m for m in scan_models("checkpoints") if m["relative"] == selected), None)
+            if known:
+                payload["architecture"] = known["architecture"]
+            api = build_workflow(payload)
+            info = workflow_builder_info()
+            problems = validate_api(api, info)
+            if problems:
+                return json_response(handler, {"error": "Workflow validation failed.", "problems": problems}, 400)
+            ui = api_to_ui(api, info)
+            identifier = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8]
+            folder = OUTPUTS / "workflow-builder" / identifier
+            folder.mkdir(parents=True)
+            for filename, data in (("workflow_api.json", api), ("workflow_ui.json", ui), ("plan.json", payload.get("plan") or {})):
+                (folder / filename).write_text(json.dumps(data, indent=2), encoding="utf-8")
+            return json_response(handler, {"id": identifier, "api": api, "ui": ui, "problems": []})
+        folder = workflow_builder_folder(payload.get("id", ""))
+        api = json.loads((folder / "workflow_api.json").read_text(encoding="utf-8"))
+        if action == "run":
+            if not comfy_ready() and not start_comfy():
+                return json_response(handler, {"error": comfy_start_error or "The image engine could not start."}, 503)
+            if engine_has_queued_work(extension_comfy_request):
+                return json_response(handler, {"error": "An extension tool is still generating. Let it finish first."}, 409)
+            release_engine_memory("extension", "joyai", "sensenova", "ollama")
+            result = comfy_request("/prompt", {"prompt": api, "client_id": "froja"}, timeout=30)
+            if "prompt_id" not in result:
+                return json_response(handler, {"error": "Workflow validation failed", "details": result}, 400)
+            return json_response(handler, {"prompt_id": result["prompt_id"]})
+        sample = None
+        if payload.get("prompt_id"):
+            prompt_id = str(payload["prompt_id"])
+            record = comfy_request("/history/" + urllib.parse.quote(prompt_id, safe="")).get(prompt_id, {})
+            status = record.get("status", {})
+            if not status.get("completed") or status.get("status_str") != "success":
+                raise ValueError("The requested job has not finished successfully.")
+            images = [image for output in record.get("outputs", {}).values() for image in output.get("images", []) if image.get("type") == "output"]
+            if not images:
+                raise ValueError("The completed job has no output image.")
+            with urllib.request.urlopen(COMFY_URL + "/view?" + urllib.parse.urlencode(images[0]), timeout=60) as response:
+                raw = response.read()
+            with Image.open(io.BytesIO(raw)) as opened:
+                stream = io.BytesIO()
+                opened.save(stream, "PNG")
+                sample = stream.getvalue()
+        ui = json.loads((folder / "workflow_ui.json").read_text(encoding="utf-8"))
+        plan = json.loads((folder / "plan.json").read_text(encoding="utf-8"))
+        pack = make_pack(folder.name, api, ui, plan, sample, {}, workflow_builder_models(api))
+        save_library(payload.get("name"), folder.name, api, ui, plan, sample, pack)
+        (folder / (folder.name + ".zip")).write_bytes(pack)
+        return json_response(handler, {"zip": "/api/workflow-builder/download/" + folder.name})
+    except FileNotFoundError as exc:
+        return json_response(handler, {"error": str(exc)}, 404)
+    except (ValueError, TypeError, KeyError) as exc:
+        return json_response(handler, {"error": str(exc)}, 400)
+    except Exception as exc:
+        return json_response(handler, {"error": str(exc)}, 500)
+
+
 class FrojaHandler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         clean = urllib.parse.urlparse(path).path.lstrip("/") or "index.html"
@@ -2609,6 +2905,38 @@ class FrojaHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         query = urllib.parse.parse_qs(parsed.query)
+        if optional_routes(self, "GET", parsed, query):  # workflow library + Civitai link
+            return
+        if parsed.path == "/api/ollama/status":  # Settings > Connections
+            try:
+                tags = ollama_request("/api/tags", timeout=4)
+                names = [m.get("name", "") for m in tags.get("models", []) if m.get("name")]
+                return json_response(self, {"running": True, "models": names})
+            except Exception:
+                return json_response(self, {"running": False, "models": []})
+        if parsed.path == "/api/workflow-builder/inventory":
+            try:
+                ready = comfy_ready() or start_comfy()
+                info = workflow_builder_info() if ready else {}
+                return json_response(self, {"nodes": len(info), "checkpoints": [m["relative"] for m in scan_models("checkpoints")], "engine": "ready" if ready else "offline"})
+            except Exception as exc:
+                return json_response(self, {"nodes": 0, "checkpoints": [], "engine": "offline", "error": str(exc)})
+        if parsed.path.startswith("/api/workflow-builder/download/"):
+            try:
+                folder = workflow_builder_folder(parsed.path[len("/api/workflow-builder/download/"):])
+                filename = folder.name + ".zip"
+                data = (folder / filename).read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            except ValueError as exc:
+                return json_response(self, {"error": str(exc)}, 400)
+            except FileNotFoundError:
+                return json_response(self, {"error": "Workflow pack was not found."}, 404)
         if parsed.path == "/api/llada/status":
             return json_response(self, llada_status())
         if parsed.path.startswith("/api/llada/jobs/"):
@@ -2942,6 +3270,11 @@ class FrojaHandler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if optional_routes(self, "POST", parsed, urllib.parse.parse_qs(parsed.query)):
+            return
+        if self.path in {"/api/workflow-builder/build", "/api/workflow-builder/run", "/api/workflow-builder/pack"}:
+            return workflow_builder_post(self, self.path.rsplit("/", 1)[-1])
         if self.path == "/api/llada/generate":
             try:
                 status = llada_status()

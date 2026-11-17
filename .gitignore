@@ -90,3 +90,5 @@ extensions/library-studio/data/
 materials/library/*
 !materials/library/README.txt
 public/brand/froja-logo-3d-raw.png
+
+workflows/my-workflows/

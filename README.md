@@ -9,12 +9,27 @@
 </p>
 
 <p align="center">
-  <strong>Create step by step · Styles &amp; Artists · Cameras · 23 tools · 3D Relight room · Video with sound · Training · System monitor</strong>
+  <strong>Create step by step · 164 Styles &amp; Artists · Workflow Builder · Cameras · 23 tools · 3D Relight room · Video with sound · Training · System monitor</strong>
 </p>
 
 > **Project status:** active work in progress. The main generation workflow is usable today; some advanced workflows are experimental and depend on the ComfyUI nodes and models installed on your computer.
 
 ![Froja studios slider](docs/screenshots/01-studios.jpg)
+
+## What's new in 0.2.2
+
+- **Workflow Builder studio — Picture to Workflow.** Drop in a picture (or type an idea): Ollama describes it, Froja builds a real ComfyUI workflow from the nodes and models *you* have, test-runs it and shows the result. Only tested workflows can be exported.
+- **Workflow Packs.** One click gives a zip with the ComfyUI workflow (drag it onto the ComfyUI canvas), the API version, the sample picture it really made, the list of models and where they go, and a short how-to. Personal folders are removed from every pack. Tested workflows are also kept in `workflows/my-workflows/` so you can find them again.
+- **164 styles with real pictures.** Every style in *Styles & Artists* now shows what that artist or style is known for — 19 are photographs of public-domain masterpieces from Wikimedia Commons (see `public/style-covers/CREDITS.md`), the rest were painted for Froja. Styles are grouped: Old Masters, Modern Art, Japan & China, Manga & Anime, Design & Architecture, Sculpture & Craft, Fantasy & Sci-Fi, Looks.
+- **Step 4 has everything on one page:** prompt on top, your style and camera (with *Change* buttons), model and settings, and the picture on the right.
+- **New Settings page:** Look & Feel, Background, Language, Connections (image engine, Ollama, Civitai, MiniMax video — with live status), Library & folders, About. Every option explains itself.
+- **Optional Civitai link (off by default):** see the sample pictures, creator, trigger words and page of your LoRAs and checkpoints. Froja sends only a file fingerprint (hash) to civitai.com — never your files or your name. Civitai is not available in every country.
+- **New 3D chrome logo.**
+
+| | |
+|---|---|
+| ![Styles & Artists](docs/screenshots/10-styles-artists.jpg) | ![Workflow Builder](docs/screenshots/11-workflow-builder.jpg) |
+| ![Settings](docs/screenshots/12-settings.jpg) | |
 
 ## What's new in 0.2
 

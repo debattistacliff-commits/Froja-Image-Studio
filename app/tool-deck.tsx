@@ -171,11 +171,11 @@ export default function ToolDeck({ tools, onClose, title = "Tools", brand, stora
         <button className="pebble deck-arrow deck-next" onClick={() => go(1)} aria-label="Next tool">›</button>
       </div>
 
-      <nav className="deck-dots" aria-label="All tools">
+      {tools.length <= 40 && <nav className="deck-dots" aria-label="All tools">
         {tools.map((tool, i) => (
           <button key={tool.name} className={i === index ? "on" : ""} title={tool.name} onClick={() => setIndex(i)} />
         ))}
-      </nav>
+      </nav>}
       <p className="deck-hint">Slide with ← → or the mouse wheel · Enter {inline ? "chooses" : "opens"}{home || inline ? "" : " · Esc closes"}</p>
     </div>
   );

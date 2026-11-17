@@ -9,7 +9,7 @@ for (const [command, prefix] of candidates) {
   if (check.status !== 0) continue;
   const result = spawnSync(
     command,
-    [...prefix, "-m", "unittest", "discover", "-s", "tests", "-p", "backend_workflows_test.py"],
+    [...prefix, "-m", "unittest", "discover", "-s", "tests", "-p", "*_test.py"],
     { stdio: "inherit" },
   );
   process.exit(result.status ?? 1);
