@@ -1,3 +1,4 @@
+import CivitaiPanel from "./civitai-panel";
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,12 +13,15 @@ import LLaDAStudio from "./llada-studio";
 import KreaFastStudio from "./krea-fast-studio";
 import VariationLab from "./variation-lab";
 import PromptBatchStudio from "./prompt-batch-studio";
+import WorkflowBuilder from "./workflow-builder";
+import SettingsStudio from "./settings-studio";
 import PortraitTransformer from "./portrait-transformer";
 import ToolDeck from "./tool-deck";
 import type { DeckTool } from "./tool-deck";
 import "./tool-deck.css";
 import StationBar, { LedPicker } from "./stations";
 import "./stations.css";
+import { STYLE_GROUPS, inStyleGroup, styleSlug } from "./style-groups";
 import LightStage, { DEFAULT_LIGHTS } from "./light-stage";
 import type { StageLight } from "./light-stage";
 import "./light-stage.css";
@@ -856,6 +860,8 @@ export default function Home() {
     localStorage.getItem("froja-style-enabled") !== "false",
   );
   const [styleSearch, setStyleSearch] = useState("");
+  const [styleGroup, setStyleGroup] = useState("all");
+  useEffect(() => { if (styleSearch.trim()) setStyleGroup("all"); }, [styleSearch]);  // searching looks through every style
   const filteredArtStyleOptions = useMemo(() => {
     const query = styleSearch.trim().toLocaleLowerCase();
     if (!query) return artStyleOptions;
@@ -871,7 +877,7 @@ export default function Home() {
   const [cameraYaw, setCameraYaw] = useState(0);
   const [cameraPitch, setCameraPitch] = useState(0);
   const [cameraZoom, setCameraZoom] = useState("unchanged");
-  const [tab, setTab] = useState<"prompt" | "negative" | "advanced">("prompt");
+  const [tab, setTab] = useState<"prompt" | "negative">("prompt");
   const [steps, setSteps] = useState(28);
   const [cfg, setCfg] = useState(7);
   const [seed, setSeed] = useState(-1);
@@ -933,6 +939,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [modelOpen, setModelOpen] = useState(false);
   const [loraOpen, setLoraOpen] = useState(false);
+  const [civitaiTarget, setCivitaiTarget] = useState<{kind: "loras" | "checkpoints"; relative: string} | null>(null);
   const [assisting, setAssisting] = useState<"enhance" | "create" | "">("");
   const [imagePromptOpen, setImagePromptOpen] = useState(false);
   const [imagePromptSource, setImagePromptSource] = useState("");
@@ -2402,6 +2409,7 @@ export default function Home() {
     { id: "styles", name: "Styles & Artists", symbol: "palette", cover: "/covers/studio-styles.webp", description: "Browse art styles and artist influences and pick the look for your next picture.", open: () => { setCreateStep(1); setStation("create"); } },
     { id: "pictures", name: "My Pictures", symbol: "gallery", cover: "/covers/studio-pictures.webp", description: "Your latest picture, your history and your favourites.", open: () => { setPreviewTab("history"); setStation("pictures"); } },
     { id: "tools", name: "Tools", symbol: "toolbox", cover: "/covers/studio-tools.webp", badge: deckTools.length, description: "All Froja studios for editing, faces, light, repair, 3D and more — slide through them.", open: () => setStation("tools") },
+    { id: "workflows", name: "Workflow Builder", symbol: "nodes", cover: "/covers/studio-workflows.webp", description: "Turn a picture or an idea into a tested, reusable image workflow.", open: () => setStation("workflows") },
     { id: "video", name: "Video Studio", symbol: "film", cover: "/covers/studio-video.webp", badge: videoEngine.online ? "READY" : "PRIVATE", description: "Make short videos from text or pictures.", open: () => { setStation("video"); setVideoOpen(true); } },
     { id: "training", name: "Training Studio", symbol: "target", cover: "/covers/studio-training.webp", badge: trainingResults.length || "NEW", description: "Create consistent picture sets and train Froja on a character or subject.", open: () => { setStation("training"); setTrainingStudioOpen(true); } },
     { id: "library", name: "Models & LoRAs", symbol: "library", cover: "/covers/studio-library.webp", badge: counts.checkpoints + counts.loras, description: "Your checkpoints, LoRAs and embeddings — linked from their folders, never copied.", open: () => { setStation("library"); openNavigation("library"); } },
@@ -2580,12 +2588,6 @@ export default function Home() {
             >
               Negative Prompt
             </button>
-            <button
-              className={tab === "advanced" ? "on" : ""}
-              onClick={() => setTab("advanced")}
-            >
-              Advanced
-            </button>
           </div>
           {tab === "prompt" && selectedLoras.length > 0 && (
             <div className="prompt-attachments">
@@ -2603,8 +2605,7 @@ export default function Home() {
               ))}
             </div>
           )}
-          {tab !== "advanced" ? (
-            <textarea
+          <textarea
               value={tab === "prompt" ? prompt : negative}
               onChange={(e) =>
                 tab === "prompt"
@@ -2617,48 +2618,6 @@ export default function Home() {
                   : "What should Froja avoid?"
               }
             />
-          ) : (
-            <div className="advanced-grid">
-              <div className="dimension-paper-preview"><div><i style={{aspectRatio:`${width}/${height}`}} /></div><span><b>{width} × {height} px</b><small>{width===height?"Square 1:1":width>height?"Landscape":"Portrait"}</small></span></div>
-              <label>
-                Sampler
-                <select
-                  value={sampler}
-                  onChange={(e) => setSampler(e.target.value)}
-                >
-                  <option value="res_multistep">Res Multistep (Z-Image)</option>
-                  <option value="er_sde">ER-SDE (Krea-2 / MOSS)</option>
-                  <option value="euler">Euler</option>
-                  <option value="euler_ancestral">Euler a</option>
-                  <option value="dpmpp_2m">DPM++ 2M</option>
-                </select>
-              </label>
-              <label>
-                Seed
-                <input
-                  type="number"
-                  value={seed}
-                  onChange={(e) => setSeed(+e.target.value)}
-                />
-              </label>
-              <label>
-                Width
-                <input
-                  type="number"
-                  value={width}
-                  onChange={(e) => setWidth(+e.target.value)}
-                />
-              </label>
-              <label>
-                Height
-                <input
-                  type="number"
-                  value={height}
-                  onChange={(e) => setHeight(+e.target.value)}
-                />
-              </label>
-            </div>
-          )}
           <div className="prompt-foot">
             <button onClick={() => { setLoraQuery(""); setLoraOpen(true); }}>+ Attach LoRA</button>
             <button onClick={() => setImagePromptOpen(true)}>
@@ -2746,6 +2705,30 @@ export default function Home() {
           </div>
         </div>
 
+        {station === "create" && createStep === 1 && (() => {
+          const deckStyles = filteredArtStyleOptions.filter(([name]) => inStyleGroup(styleGroup, name));
+          return (
+            <div className="style-deck-step">
+              <div className="style-groups" role="tablist" aria-label="Style groups">
+                {STYLE_GROUPS.map((g) => {
+                  const count = filteredArtStyleOptions.filter(([name]) => inStyleGroup(g.id, name)).length;
+                  return <button key={g.id} role="tab" aria-selected={styleGroup === g.id} className={styleGroup === g.id ? "selected" : ""} disabled={!count} onClick={() => setStyleGroup(g.id)}>{g.label} <i>{count}</i></button>;
+                })}
+              </div>
+              {deckStyles.length ? (
+                <ToolDeck key={`${styleGroup}|${styleSearch}`} inline stay title={STYLE_GROUPS.find((g) => g.id === styleGroup)?.label || "Styles"} storageKey="froja-style-index" actionLabel="Use this style"
+                  startIndex={Math.max(0, deckStyles.findIndex(([name]) => name === style))}
+                  onClose={() => undefined}
+                  tools={deckStyles.map(([name, description]) => ({
+                    name, symbol: "palette", cover: `/style-covers/${styleSlug(name)}.webp`,
+                    badge: name === style && styleEnabled ? "IN USE" : undefined,
+                    description: description.length > 120 ? `${description.slice(0, 117)}…` : description,
+                    open: () => { setStyle(name); setStyleEnabled(true); },
+                  }))} />
+              ) : <p className="style-none">No style matches “{styleSearch}”.</p>}
+            </div>
+          );
+        })()}
         <div className="section-title camera-title">
           <b>Camera & Lens</b>
           <small>Applied automatically to text-to-image prompts</small>
@@ -2779,9 +2762,29 @@ export default function Home() {
           </div>
         )}
 
+        {station === "create" && createStep === 3 && (() => {
+          const cam = cameraProfiles.find((c) => c.id === cameraProfile);
+          return (
+            <div className="create-recipe">
+              <div className={`recipe-chip ${styleEnabled ? "" : "is-off"}`}>
+                <img src={`/style-covers/${styleSlug(style)}.webp`} alt="" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+                <span><small>Style</small><b>{styleEnabled ? style : "No style (off)"}</b></span>
+                <label className="recipe-switch" title="Use this style"><input type="checkbox" checked={styleEnabled} onChange={(e) => setStyleEnabled(e.target.checked)} /><i /></label>
+                <button onClick={() => setCreateStep(1)}>Change</button>
+              </div>
+              <div className="recipe-chip">
+                <img src={`/camera-covers/${cameraProfile}.webp`} alt="" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+                <span><small>Camera</small><b>{cam?.name || "No camera"}</b></span>
+                <button onClick={() => setCreateStep(2)}>Change</button>
+              </div>
+            </div>
+          );
+        })()}
+
         <section className="model-settings">
           <div className="section-title">
             <b>Model & Settings</b>
+            {checkpoint && <button onClick={() => setCivitaiTarget({kind: "checkpoints", relative: checkpoint})}>ⓘ Civitai</button>}
             <small>Live data from your linked folders</small>
           </div>
           <div className="settings-grid">
@@ -3451,7 +3454,9 @@ export default function Home() {
         </div>
       )}
 
-      {navPanel && (
+      {navPanel === "settings" && <SettingsStudio ledColor={ledColor} setLedColor={setLedColor} iconStyle={iconStyle} setIconStyle={setIconStyle} fontFamily={fontFamily} setFontFamily={setFontFamily} textScale={textScale} setTextScale={setTextScale} fontScale={fontScale} setFontScale={setFontScale} boldText={boldText} setBoldText={setBoldText} uiLanguage={uiLanguage} setUiLanguage={setUiLanguage} pendingBackground={pendingBackground} setPendingBackground={setPendingBackground} customBackground={customBackground} setCustomBackground={setCustomBackground} themeFileName={themeFileName} setThemeFileName={setThemeFileName} themeUploadState={themeUploadState} setThemeUploadState={setThemeUploadState} loadThemeBackground={loadThemeBackground} maintenanceState={maintenanceState} setMaintenanceState={setMaintenanceState} refreshLibrary={refreshLibrary} downloadSettingsBackup={downloadSettingsBackup} onClose={() => setNavPanel("")} />}
+
+      {navPanel && navPanel !== "settings" && (
         <div className="modal navigation-modal" onClick={() => setNavPanel("")}>
           <div className="drawer navigation-drawer" onClick={(event) => event.stopPropagation()}>
             <header><div><h2>{navPanel[0].toUpperCase() + navPanel.slice(1)}</h2><p>Froja workspace and application controls.</p></div><button onClick={() => setNavPanel("")}>×</button></header>
@@ -3460,27 +3465,6 @@ export default function Home() {
             {navPanel === "presets" && <div className="nav-workspace"><p>Save and restore your current prompt, model, style, sampler, dimensions, steps and CFG settings.</p><button onClick={saveCurrentPreset}>Save current settings as My Preset</button><button onClick={loadCurrentPreset}>Load My Preset</button><button onClick={() => { setSteps(28); setCfg(7); setWidth(768); setHeight(768); setSampler("euler"); setMaintenanceState("Balanced defaults applied."); }}>Apply balanced defaults</button></div>}
             {navPanel === "workflows" && <div className="workflow-grid"><button onClick={() => { setNavPanel(""); setSenseNovaOpen(true); }}><b>SenseNova Q4</b><small>Experimental unified local generation for the 12 GB safety profile.</small></button><button onClick={() => { setNavPanel(""); setImagePromptOpen(true); }}><b>Image → Prompt</b><small>Understand an image and produce a generation prompt.</small></button><button onClick={() => { setNavPanel(""); openImageTool("img2img"); }}><b>Image → Image</b><small>Recreate or transform an existing image.</small></button><button onClick={() => { setNavPanel(""); setReferenceComposerOpen(true); }}><b>Reference Composer</b><small>Combine a character, furniture, room, material and prop into one image.</small></button><button onClick={() => { setNavPanel(""); setSketch3DOpen(true); }}><b>Sketch → 3D Studio</b><small>Convert sketches into dimensional renders, controlled views and mesh-ready assets.</small></button><button onClick={() => { setNavPanel(""); openImageTool("krea2-reference"); }}><b>Krea-2 Reference Edit</b><small>Turn anime, artwork or a reference into a new Krea-2 interpretation.</small></button><button onClick={() => { setNavPanel(""); openImageTool("inpaint"); }}><b>Inpainting</b><small>Repair a selected area.</small></button><button onClick={() => { setNavPanel(""); setRelightOpen(true); }}><b>IC-Light Relight</b><small>Change the direction and character of light.</small></button><button onClick={() => { setNavPanel(""); setRepairOpen(true); }}><b>Repair Studio</b><small>Correct faces, eyes, hands and local defects.</small></button><button onClick={() => { setNavPanel(""); setJoyaiOpen(true); }}><b>Smart Edit</b><small>Edit an image using natural-language instructions.</small></button></div>}
             {navPanel === "embeddings" && <><input className="nav-search" placeholder="Search embeddings…" value={embeddingSearch} onChange={(event) => setEmbeddingSearch(event.target.value)} /><div className="embedding-list">{embeddings.filter((item) => item.name.toLowerCase().includes(embeddingSearch.toLowerCase())).map((item) => <article key={item.path}><div><b>{item.name}</b><small>{item.source} · {(item.size / 1024 / 1024).toFixed(1)} MB</small></div><button onClick={() => { setNegative((value) => [value, `embedding:${item.name.replace(/\.[^.]+$/, "")}`].filter(Boolean).join(", ")); setMaintenanceState(`${item.name} added to the negative prompt.`); }}>Add to negative prompt</button></article>)}</div></>}
-            {navPanel === "settings" && <div className="nav-workspace">
-              <h3 className="settings-section-title"><Icon name="palette" /> {t("appearance")}</h3>
-              <div className="theme-grid">
-                {[['forge','Forge Dark','Teal · professional'],['midnight','Midnight Blue','Blue · calm'],['bronze','Warm Bronze','Copper · artistic'],['contrast','High Contrast','Clear · accessible']].map(([id,name,note]) => <button className={uiTheme === id ? 'selected' : ''} onClick={() => setUiTheme(id)} key={id}><i /><b>{name}</b><small>{note}</small></button>)}
-              </div>
-              <div className="icon-style-options"><button className={iconStyle === "outline" ? "selected" : ""} onClick={() => setIconStyle("outline")}><span className="icon-demo outline-demo"><Icon name="settings" /></span><b>Professional Outline</b><small>Clean, minimal and compact</small></button><button className={iconStyle === "soft3d" ? "selected" : ""} onClick={() => setIconStyle("soft3d")}><span className="icon-demo soft3d-demo"><Icon name="settings" /></span><b>Soft 3D</b><small>Windows-style depth and recognition</small></button></div>
-              <div className="accessibility-options"><label>{t("language")}<select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}><option value="en">English</option><option value="pt">Português</option><option value="it">Italiano</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option></select></label><label>{t("typeface")}<select value={fontFamily} onChange={(event) => setFontFamily(event.target.value)}><option value="modern">Modern Sans</option><option value="humanist">Humanist</option><option value="classic">Classic Serif</option><option value="mono">Technical Mono</option></select></label></div>
-              <label className="font-scale-control">{t("textSize")} <b>{textScale}%</b><input aria-label={t("textSize")} type="range" min="90" max="160" step="5" value={textScale} onChange={(event) => setTextScale(+event.target.value)} /><small>Make writing larger or smaller without changing panel dimensions.</small></label>
-              <label className="font-scale-control">{t("displaySize")} <b>{fontScale}%</b><input aria-label={t("displaySize")} type="range" min="90" max="140" step="5" value={fontScale} onChange={(event) => setFontScale(+event.target.value)} /><small>Make the complete interface larger or smaller.</small></label>
-              <label className="switch-control"><span><b>{t("bold")}</b><small>Increase the weight of interface labels.</small></span><input type="checkbox" checked={boldText} onChange={(event) => setBoldText(event.target.checked)} /></label>
-              <div className="built-in-backgrounds"><b>Built-in Froja themes</b><small>Each choice applies its background, accent colours, panel tint and glow.</small><div>{[["/themes/cosmic-quiet.png","Cosmic Quiet","midnight"],["/themes/bronze-forge.png","Bronze Forge","bronze"],["/themes/teal-studio.png","Teal Studio","forge"]].map(([src,name,theme]) => <button className={customBackground === src ? "selected" : ""} key={src} onClick={() => { setCustomBackground(src); setUiTheme(theme); setPendingBackground(""); setThemeFileName(""); setMaintenanceState(`${name} theme applied.`); }}><img src={src} alt={`${name} Froja background`} /><span>{name}</span><small>{theme === "bronze" ? "Copper accents" : theme === "midnight" ? "Blue accents" : "Teal accents"}</small></button>)}</div></div>
-              <div className="background-control">
-                <b>Theme background image</b><small>PNG, JPEG or WebP · up to 20 MB · resized automatically</small>
-                <label className="theme-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); loadThemeBackground(event.dataTransfer.files?.[0]); }}><Icon name="image" /><span>{themeUploadState}</span>{themeFileName && <small>{themeFileName}</small>}<strong>Choose Image</strong><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => loadThemeBackground(event.target.files?.[0])} /></label>
-                {(pendingBackground || customBackground) && <img src={pendingBackground || customBackground} alt="Custom Froja theme background preview" />}
-                <div className="background-actions">{pendingBackground && <button className="apply-background" onClick={() => { setCustomBackground(pendingBackground); setPendingBackground(""); setMaintenanceState("Custom background applied and saved."); }}>Apply Background</button>}{(pendingBackground || customBackground) && <button onClick={() => { setPendingBackground(""); setCustomBackground(""); setThemeFileName(""); setThemeUploadState("Choose or drop an image"); setMaintenanceState("Custom background removed."); }}>Remove</button>}</div>
-              </div>
-              <h3 className="settings-section-title"><Icon name="library" /> Library</h3><button onClick={refreshLibrary}>Refresh models, LoRAs and embeddings</button>
-              <h3 className="settings-section-title"><Icon name="preset" /> Backup</h3><button onClick={downloadSettingsBackup}>Download Froja settings backup</button><small>Backups contain settings and presets only. Checkpoints and LoRAs are never copied.</small>
-              <h3 className="settings-section-title"><Icon name="settings" /> Updates</h3><div className="settings-note"><b>Safe update channel</b><p>Automatic replacement is currently disabled until Froja has versioned releases and one-click rollback. This prevents an update from breaking your working installation.</p></div>
-            </div>}
             {maintenanceState && <div className="maintenance-state">{maintenanceState}</div>}
           </div>
         </div>
@@ -3641,6 +3625,7 @@ export default function Home() {
 
       {variationLabOpen && <VariationLab onClose={()=>setVariationLabOpen(false)} checkpoint={checkpoint} architecture={current?.architecture} width={width} height={height} seed={seed} loras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))} />}
 
+      {station === "workflows" && <WorkflowBuilder onClose={() => setStation("")} checkpoint={checkpoint} negative={negative} steps={steps} cfg={cfg} width={width} height={height} sampler={sampler} stylePrompt={styleEnabled ? artStylePrompts[style] || "" : ""} />}
       {promptBatchOpen && <PromptBatchStudio onClose={()=>setPromptBatchOpen(false)} checkpoint={checkpoint} architecture={current?.architecture} negative={negative} steps={steps} cfg={cfg} width={width} height={height} sampler={sampler} stylePrompt={styleEnabled ? artStylePrompts[style]||"" : ""} loras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))} />}
 
       {portraitTransformerOpen && <PortraitTransformer onClose={()=>setPortraitTransformerOpen(false)} models={models.map(item=>({name:item.name,relative:item.relative,architecture:item.architecture}))} loras={loras.map(item=>({name:item.name,relative:item.relative,baseModel:item.base_model,triggers:item.triggers}))} initialCheckpoint={checkpoint} initialLoras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))} styles={artStyleOptions} width={width} height={height} seed={seed} />}
@@ -3934,6 +3919,7 @@ export default function Home() {
           </div>
         </div>
       )}
+      {civitaiTarget && <CivitaiPanel target={civitaiTarget} onClose={() => setCivitaiTarget(null)} onAdd={words => setPrompt(previous => [previous, words].filter(Boolean).join(", "))} />}
       {loraOpen && (
         <div className="modal" onClick={() => setLoraOpen(false)}>
           <div className="drawer wide" onClick={(e) => e.stopPropagation()}>
@@ -4031,6 +4017,7 @@ export default function Home() {
                     <b title={l.name}>
                       {l.name.replace(/\.safetensors$/i, "")}
                     </b>
+                    <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setCivitaiTarget({kind: "loras", relative: l.relative}); }} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setCivitaiTarget({kind: "loras", relative: l.relative}); } }}>ⓘ Civitai</span>
                     <small>{l.base_model || l.source}</small>
                     {pinned && <span className="favorite-label">My Favorite</span>}
                     {l.triggers?.length ? (

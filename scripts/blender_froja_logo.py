@@ -1,6 +1,6 @@
 """Render the 3D FROJA logo with Blender.
 
-Clifford's emblem (shutter ring, blue flame, anvil, spark) as a 3D medallion with a copper rim, extruded
+the Froja emblem (shutter ring, blue flame, anvil, spark) as a 3D medallion with a copper rim, extruded
 brushed-metal FROJA letters (Michroma), a glowing "IMAGE STUDIO" line, and a glossy black floor that gives
 soft shading and a reflection under the logo.
 
@@ -70,6 +70,27 @@ world.use_nodes = True
 bg = next(n for n in world.node_tree.nodes if n.type == "BACKGROUND")
 bg.inputs[0].default_value = (0.006, 0.007, 0.009, 1)
 bg.inputs[1].default_value = 1.0
+wn = world.node_tree
+w_out = next(n for n in wn.nodes if n.type == "OUTPUT_WORLD")
+w_coord = wn.nodes.new("ShaderNodeTexCoord")
+w_sep = wn.nodes.new("ShaderNodeSeparateXYZ")
+w_ramp = wn.nodes.new("ShaderNodeValToRGB")
+w_ramp.color_ramp.elements[0].position = 0.42
+w_ramp.color_ramp.elements[0].color = (0.004, 0.004, 0.005, 1)
+w_ramp.color_ramp.elements[1].position = 0.78
+w_ramp.color_ramp.elements[1].color = (1.15, 1.18, 1.22, 1)
+w_map = wn.nodes.new("ShaderNodeMapRange"); w_map.inputs["From Min"].default_value = -1.0; w_map.inputs["From Max"].default_value = 1.0
+w_studio = wn.nodes.new("ShaderNodeBackground")
+w_path = wn.nodes.new("ShaderNodeLightPath")
+w_mix = wn.nodes.new("ShaderNodeMixShader")
+wn.links.new(w_coord.outputs["Generated"], w_sep.inputs["Vector"])
+wn.links.new(w_sep.outputs["Z"], w_map.inputs["Value"])
+wn.links.new(w_map.outputs["Result"], w_ramp.inputs["Fac"])
+wn.links.new(w_ramp.outputs["Color"], w_studio.inputs["Color"])
+wn.links.new(w_path.outputs["Is Camera Ray"], w_mix.inputs["Fac"])
+wn.links.new(w_studio.outputs["Background"], w_mix.inputs[1])
+wn.links.new(bg.outputs["Background"], w_mix.inputs[2])
+wn.links.new(bg.outputs["Background"], w_out.inputs["Surface"])  # world stays black; the softbox below lights the letters
 
 
 def principled(mat):
@@ -99,17 +120,18 @@ def material(name, color, metallic=0.0, rough=0.4, emission=None, strength=0.0, 
     return m
 
 
-chrome = material("BrushedChrome", (0.93, 0.95, 0.97), metallic=0.92, rough=0.26, aniso=0.6)
+chrome = material("BrushedChrome", (0.92, 0.94, 0.96), metallic=1.0, rough=0.2, aniso=0.55)
 nt = chrome.node_tree
 noise = nt.nodes.new("ShaderNodeTexNoise"); noise.inputs["Scale"].default_value = 300.0; noise.inputs["Detail"].default_value = 6.0
 mapping = nt.nodes.new("ShaderNodeMapping"); mapping.inputs["Scale"].default_value = (1.0, 80.0, 1.0)
 coord = nt.nodes.new("ShaderNodeTexCoord")
-rng = nt.nodes.new("ShaderNodeMapRange"); rng.inputs["To Min"].default_value = 0.20; rng.inputs["To Max"].default_value = 0.34
+rng = nt.nodes.new("ShaderNodeMapRange"); rng.inputs["To Min"].default_value = 0.14; rng.inputs["To Max"].default_value = 0.26
 nt.links.new(coord.outputs["Object"], mapping.inputs["Vector"])
 nt.links.new(mapping.outputs["Vector"], noise.inputs["Vector"])
 nt.links.new(noise.outputs["Fac"], rng.inputs["Value"])
 nt.links.new(rng.outputs["Result"], principled(chrome).inputs["Roughness"])
 
+steel_side = material("BrushedSteelSide", (0.42, 0.44, 0.47), metallic=0.45, rough=0.42)
 copper = material("Copper", (0.80, 0.42, 0.22), metallic=1.0, rough=0.3)
 gunmetal = material("Gunmetal", (0.06, 0.065, 0.075), metallic=0.9, rough=0.35)
 led = material("CyanLED", (0.0, 0.5, 0.65), emission=(0.0, 0.78, 1.0), strength=6.0)
@@ -176,12 +198,50 @@ def text_object(body, size, extrude, bevel, mat, location, spacing=1.0, thicken=
     bpy.ops.object.shade_smooth()
     return bpy.context.object
 
-word = text_object("FROJA", 1.95, 0.30, 0.04, chrome, (-0.75, 0.0, 1.02), spacing=1.12, thicken=0.045)
+word = text_object("FROJA", 1.95, 0.55, 0.06, chrome, (-0.75, 0.0, 1.02), spacing=1.22, thicken=0.022)
+word.data.materials.append(steel_side)
+to_world = word.matrix_world.to_3x3()
+for poly in word.data.polygons:
+    # use the WORLD direction of each face: faces looking at the camera (-Y) stay polished silver,
+    # the depth (top, sides, inner walls) gets the darker steel
+    normal = (to_world @ poly.normal).normalized()
+    poly.material_index = 0 if normal.y < -0.55 else 1
 sub = text_object("IMAGE  STUDIO", 0.42, 0.02, 0.006, led, (-0.68, -0.05, 0.28), spacing=1.9)
 
 # ---------- glossy floor: shading + reflection under the logo ----------
 bpy.ops.mesh.primitive_plane_add(size=60, location=(0, 0, 0))
 floor = bpy.context.object; floor.data.materials.append(floor_mat)
+
+# ---------- studio softbox: a tall panel in front of the logo, bright at the top, dark at the bottom.
+# Only the letters reflect it (the camera does not see it and the floor reflects the other way).
+box_mat = bpy.data.materials.new("SoftboxGradient")
+box_mat.use_nodes = True
+bn = box_mat.node_tree
+for node in list(bn.nodes):
+    if node.type != "OUTPUT_MATERIAL":
+        bn.nodes.remove(node)
+b_out = next(n for n in bn.nodes if n.type == "OUTPUT_MATERIAL")
+b_coord = bn.nodes.new("ShaderNodeTexCoord")
+b_sep = bn.nodes.new("ShaderNodeSeparateXYZ")
+b_ramp = bn.nodes.new("ShaderNodeValToRGB")
+b_ramp.color_ramp.elements[0].position = 0.05
+b_ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1)
+b_ramp.color_ramp.elements[1].position = 0.95
+b_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1)
+b_emit = bn.nodes.new("ShaderNodeEmission"); b_emit.inputs["Strength"].default_value = 2.6
+bn.links.new(b_coord.outputs["Generated"], b_sep.inputs["Vector"])
+bn.links.new(b_sep.outputs["Y"], b_ramp.inputs["Fac"])
+bn.links.new(b_ramp.outputs["Color"], b_emit.inputs["Color"])
+bn.links.new(b_emit.outputs["Emission"], b_out.inputs["Surface"])
+bpy.ops.mesh.primitive_plane_add(size=1, location=(0.75, -12.0, 2.0), rotation=(math.radians(90), 0, 0))
+softbox = bpy.context.object
+softbox.scale = (40, 9, 1)
+softbox.data.materials.append(box_mat)
+for attr in ("visible_camera", "visible_shadow"):
+    try:
+        setattr(softbox, attr, False)
+    except Exception:
+        pass
 
 # ---------- lights ----------
 def area(name, loc, rot, energy, size, color=(1, 1, 1)):
@@ -193,17 +253,17 @@ def area(name, loc, rot, energy, size, color=(1, 1, 1)):
     return obj
 
 area("Key", (1.5, -7.5, 6.5), (math.radians(48), 0, math.radians(10)), 1500, 6)
-area("FrontSoftbox", (0.5, -14.0, 5.0), (math.radians(72), 0, 0), 2600, 14)
-area("FrontLow", (0.5, -12.0, 0.6), (math.radians(95), 0, 0), 700, 10, (0.75, 0.9, 1.0))
-area("TopStrip", (1.0, -1.5, 7.5), (0, 0, 0), 600, 12)
+area("FrontSoftbox", (0.5, -14.0, 7.0), (math.radians(62), 0, 0), 1400, 14)
+area("FrontLow", (0.5, -12.0, 0.6), (math.radians(95), 0, 0), 250, 10, (0.75, 0.9, 1.0))
+area("TopStrip", (1.5, 0.0, 6.5), (0, 0, 0), 1600, 14)
 area("RimCyan", (8.0, 3.0, 2.5), (math.radians(-70), math.radians(25), math.radians(110)), 900, 3, (0.45, 0.85, 1.0))
 area("RimLeft", (-8.0, 2.0, 3.0), (math.radians(-70), math.radians(-25), math.radians(-110)), 500, 3, (0.5, 0.85, 1.0))
 
-cam_data = bpy.data.cameras.new("Cam"); cam_data.lens = 62
+cam_data = bpy.data.cameras.new("Cam"); cam_data.lens = 135
 cam = bpy.data.objects.new("Cam", cam_data); scene.collection.objects.link(cam); scene.camera = cam
 aim = bpy.data.objects.new("Aim", None); scene.collection.objects.link(aim)
-aim.location = (0.45, 0, 1.15)
-cam.location = (0.45, -22.0, 3.0)
+aim.location = (0.75, 0, 1.0)
+cam.location = (0.75, -50.0, 8.2)
 track = cam.constraints.new("TRACK_TO"); track.target = aim
 track.track_axis = "TRACK_NEGATIVE_Z"; track.up_axis = "UP_Y"
 
