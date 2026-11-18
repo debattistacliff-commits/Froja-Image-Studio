@@ -432,6 +432,14 @@ class LocalConfigTests(unittest.TestCase):
                 else:
                     os.environ["FROJA_CONFIG"] = previous
 
+    def test_ollama_errors_are_explained(self):
+        message = backend.ollama_error_message(404, b'{"error":"model \'qwen3-vl:4b\' not found"}')
+        self.assertIn("not found", message)
+        self.assertIn("ollama pull", message)
+        odd = backend.ollama_error_message(425, b"")
+        self.assertIn("425", odd)
+        self.assertIn("VPN", odd)
+
 
 if __name__ == "__main__":
     unittest.main()

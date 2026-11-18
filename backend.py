@@ -1571,8 +1571,31 @@ def ollama_request(path: str, data: dict | None = None, timeout=180):
         data=encoded,
         headers={"Content-Type": "application/json"} if encoded else {},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read() or b"{}")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(ollama_error_message(exc.code, exc.read())) from None
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Froja could not reach Ollama at {OLLAMA_URL}. Is Ollama running? ({exc.reason})") from None
+
+
+def ollama_error_message(code: int, body: bytes) -> str:
+    """Turn an Ollama HTTP error into a plain-English message (Ollama's own text included when it sends one)."""
+    try:
+        detail = str(json.loads(body or b"{}").get("error", "")).strip()
+    except Exception:
+        detail = (body or b"").decode("utf-8", "replace").strip()[:200]
+    hints = {
+        404: "The Ollama model is not installed. Install it with: ollama pull qwen3-vl:4b and ollama pull qwen3.5:4b",
+        429: "Ollama is busy. Wait a moment and try again.",
+        500: "Ollama had an internal problem. Restart Ollama and try again.",
+    }
+    hint = hints.get(code) or (
+        "This answer did not come from Ollama itself. A VPN, proxy or firewall may be sitting between Froja and Ollama, "
+        f"or Froja's Ollama address ({OLLAMA_URL}) points to the wrong program. Check the VPN's split tunnelling and the "
+        "ollama_url setting." if code not in (400,) else "Ollama rejected the request.")
+    return f"Ollama error {code}" + (f": {detail}" if detail else "") + f" — {hint}"
 
 
 def ollama_message_text(result: dict) -> str:

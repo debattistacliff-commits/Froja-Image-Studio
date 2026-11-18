@@ -225,6 +225,13 @@ To use it:
 
 Froja starts the MiniMax engine only for a job (on port 9020, set `minimax_video_url` in `config/config.local.json` to change it), frees memory from the picture engines first, makes one clip at a time, and stops the video engine again afterwards.
 
+## If something doesn't work
+
+- **Image to Prompt / Enhance / Prompt Helper shows an Ollama error (for example 425) or never answers:** something is blocking the connection between Froja and Ollama — usually a **VPN or proxy**. Turn the VPN off, or add `ollama.exe` and `lib\ollama\llama-server.exe` (in the Ollama folder) to the VPN's split-tunnelling / bypass list, then restart Ollama.
+- **"model not found":** install the models Froja uses: `ollama pull qwen3-vl:4b` and `ollama pull qwen3.5:4b`.
+- **Froja stopped working:** Froja runs in a black window called *START_FROJA* — minimise it, don't close it. Start Froja again with the desktop shortcut.
+- **Still stuck?** Open an issue on GitHub with a screenshot.
+
 ## Privacy and model safety
 
 - Froja binds to `127.0.0.1` by default.
