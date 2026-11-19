@@ -23,6 +23,25 @@
 A narrated walk-through: write an idea, let Ollama improve it, pick a style and camera, generate, turn a picture into a tested ComfyUI workflow, and relight a portrait in the 3D light room. Everything in the video — pictures, animation, music and voice — was made locally with Froja and open models.
 
 
+## What's new in 0.3 — the person tools (marked TEST in the app)
+
+- **4D Studio** — one editor around one person. A *master* picture keeps a history (undo/redo); every change follows the person to every angle:
+  - **Camera** — drag a camera around a sphere (or click Front · Side · Back · corners, Low · Eye level · High, Wide · Medium · Close-up) and *take that view*.
+  - **Clothes** — type what to change (“the t-shirt”) and what it becomes (“a black hoodie”).
+  - **Person** — swap in another face (use only photos you have permission to use).
+  - **Background** — keep the person, change the place (“a sunny beach”).
+  - **360°** — make the full spin from the master.
+- **360° Spin** — turn one photo into 8 views around the person and drag to rotate. Every view is built from the original photo, so the person stays the same (sides and back are imagined by AI; small details can change).
+- **Mask by words** in Inpainting — type “the shirt”, “the sky” or “the car” and Froja selects it for you (SAM2 + GroundingDINO; the models download once, about 1 GB).
+- **New Relight panel** — the picture sits inside a wireframe sphere; hold and drag the lamp, choose Softbox · Spot · Sky, colour, soft or hard shadows, brightness and height, with a live preview ball.
+
+| | |
+|---|---|
+| ![4D Studio](docs/screenshots/13-4d-studio.jpg) | ![Relight sphere](docs/screenshots/14-relight-sphere.jpg) |
+| ![4D Studio results](docs/screenshots/15-4d-studio-results.jpg) | ![360° Spin](docs/screenshots/16-360-spin.jpg) |
+
+Camera views use Qwen-Image-Edit-2509 with the *Multiple-angles* and *Lightning* LoRAs; on a 12 GB card each view takes about 2–4 minutes.
+
 ## What's new in 0.2.2
 
 - **Workflow Builder studio — Picture to Workflow.** Drop in a picture (or type an idea): Ollama describes it, Froja builds a real ComfyUI workflow from the nodes and models *you* have, test-runs it and shows the result. Only tested workflows can be exported.

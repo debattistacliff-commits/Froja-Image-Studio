@@ -3,6 +3,7 @@ import unittest
 import tempfile
 import urllib.parse
 from pathlib import Path
+from unittest.mock import patch
 
 import backend
 
@@ -43,6 +44,159 @@ class WorkflowBuilderTests(unittest.TestCase):
         self.assertFalse(backend.model_is_auxiliary(Path("realisticVisionXL_v60.safetensors")))
     def test_gpu_memory_handoff_is_available_for_isolated_engines(self):
         self.assertTrue(callable(backend.release_engine_memory))
+
+    def test_camera_view_workflow_uses_qwen_edit_with_four_step_sampling(self):
+        workflow = backend.build_camera_view_workflow({"instruction": "rotate_right_45", "seed": 42}, "FrojaSpin/photo.png")
+        self.assertEqual([node["class_type"] for node in workflow.values()], [
+            "LoadImage", "ImageScaleToTotalPixels", "UNETLoader", "LoraLoaderModelOnly",
+            "LoraLoaderModelOnly", "ModelSamplingAuraFlow", "CFGNorm", "CLIPLoader", "VAELoader",
+            "TextEncodeQwenImageEditPlus", "ConditioningZeroOut", "VAEEncode", "KSampler", "VAEDecode",
+            "GetImageSize", "ImageScale", "SaveImage",
+        ])
+        self.assertEqual(workflow["1"]["inputs"]["image"], "FrojaSpin/photo.png")
+        self.assertEqual(workflow["3"]["inputs"]["unet_name"], "qwen_image_edit_2509_fp8_e4m3fn.safetensors")
+        self.assertEqual(workflow["4"]["inputs"]["lora_name"], "Qwen-Edit-2509-Multiple-angles.safetensors")
+        self.assertEqual(workflow["5"]["inputs"]["lora_name"], "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors")
+        self.assertEqual(workflow["5"]["inputs"]["model"], ["4", 0])
+        self.assertEqual(workflow["10"]["inputs"]["image1"], ["1", 0])
+        self.assertNotIn("image2", workflow["10"]["inputs"])
+        self.assertEqual(workflow["16"]["inputs"]["image"], ["1", 0])
+        self.assertEqual(workflow["17"]["inputs"]["width"], ["16", 0])
+        self.assertEqual(workflow["17"]["inputs"]["height"], ["16", 1])
+        self.assertEqual(workflow["17"]["inputs"]["crop"], "disabled")
+        self.assertEqual(workflow["15"]["inputs"]["images"], ["17", 0])
+        sampler = workflow["13"]["inputs"]
+        self.assertEqual((sampler["steps"], sampler["cfg"], sampler["seed"]), (4, 1.0, 42))
+
+    def test_camera_view_workflow_maps_supported_instructions(self):
+        for instruction, prompt in {
+            "rotate_left_45": "将镜头向左旋转45度",
+            "rotate_right_45": "将镜头向右旋转45度",
+            "rotate_left_90": "将镜头向左旋转90度",
+            "rotate_right_90": "将镜头向右旋转90度",
+            "top": "将镜头转为俯视",
+            "low": "将镜头转为仰视",
+            "closeup": "将镜头转为特写镜头",
+            "wide": "将镜头转为广角镜头",
+        }.items():
+            with self.subTest(instruction=instruction):
+                workflow = backend.build_camera_view_workflow({"instruction": instruction}, "photo.png")
+                actual = workflow["10"]["inputs"]["prompt"]
+                if instruction.startswith("rotate_"):
+                    self.assertIn(prompt, actual)
+                    self.assertIn("Keep exactly the same person from image 1", actual)
+                else:
+                    self.assertEqual(actual, prompt)
+                self.assertIn(workflow["13"]["inputs"]["seed"], range(2**32))
+
+    def test_camera_spin_uses_side_guides_for_rear_angles(self):
+        for instruction, target, rotation in (
+            ("rear_right", "135 degrees to the right of image 1", "将镜头向右旋转45度"),
+            ("back", "straight back view", "将镜头向右旋转90度"),
+            ("rear_left", "135 degrees to the left of image 1", "将镜头向左旋转45度"),
+        ):
+            with self.subTest(instruction=instruction):
+                payload = {"instruction": instruction, "seed": 42}
+                workflow = backend.build_camera_view_workflow(payload, "original.png", "profile.png")
+                conditioning = workflow["10"]["inputs"]
+                self.assertEqual(workflow["1"]["inputs"]["image"], "original.png")
+                self.assertEqual(workflow["18"]["inputs"]["image"], "profile.png")
+                self.assertEqual((conditioning["image1"], conditioning["image2"]), (["1", 0], ["18", 0]))
+                self.assertIn(target, conditioning["prompt"])
+                self.assertIn(f"From the camera position in image 2: {rotation}", conditioning["prompt"])
+                self.assertEqual(workflow["13"]["inputs"]["seed"], 42)
+                with self.assertRaises(ValueError):
+                    backend.build_camera_view_workflow(payload, "original.png")
+
+    def test_camera_view_workflow_rejects_unsupported_instructions(self):
+        for instruction in ("rotate", "", None, []):
+            with self.subTest(instruction=instruction), self.assertRaises(ValueError):
+                backend.build_camera_view_workflow({"instruction": instruction}, "photo.png")
+
+    def test_camera_position_maps_every_azimuth(self):
+        expected = {
+            0: "front view",
+            45: "将镜头向右旋转45度",
+            90: "将镜头向右旋转90度",
+            135: "将镜头向右旋转135度",
+            180: "将镜头向右旋转180度",
+            225: "将镜头向左旋转135度",
+            270: "将镜头向左旋转90度",
+            315: "将镜头向左旋转45度",
+        }
+        for azimuth, command in expected.items():
+            with self.subTest(azimuth=azimuth):
+                prompt = backend.camera_position_prompt(azimuth, "eye", "medium")
+                self.assertIn(command, prompt)
+                self.assertIn("eye level, medium shot", prompt)
+                self.assertIn("Keep the same background location", prompt)
+
+    def test_camera_position_combines_elevation_and_distance(self):
+        high = backend.camera_position_prompt(45, "high", "wide")
+        self.assertIn("将镜头向右旋转45度。 将镜头转为俯视。 将镜头转为广角镜头", high)
+        self.assertIn("high angle, looking down, wide shot", high)
+        self.assertNotIn("Keep the subject about the same size", high)
+        low = backend.camera_position_prompt(315, "low", "closeup")
+        self.assertIn("将镜头向左旋转45度。 将镜头转为仰视。 将镜头转为特写镜头", low)
+        self.assertIn("low angle, looking up, close-up", low)
+
+    def test_camera_position_workflow_keeps_the_master_as_image_one(self):
+        workflow = backend.build_camera_view_workflow({"azimuth": 180, "seed": 42}, "master.png", "profile.png")
+        conditioning = workflow["10"]["inputs"]
+        self.assertEqual(workflow["1"]["inputs"]["image"], "master.png")
+        self.assertEqual((conditioning["image1"], conditioning["image2"]), (["1", 0], ["18", 0]))
+        self.assertIn("From the camera position in image 2: 将镜头向右旋转90度", conditioning["prompt"])
+        self.assertIn("straight back view", conditioning["prompt"])
+        self.assertIn("face fully hidden", conditioning["prompt"])
+
+    def test_camera_position_rejects_invalid_settings(self):
+        valid = {"azimuth": 45, "elevation": "eye", "distance": "medium"}
+        for field, values in (
+            ("azimuth", (None, True, 45.0, "45", 1, -45, 360)),
+            ("elevation", (None, [], 0, "eye-level", "top")),
+            ("distance", (None, {}, "zoom", False)),
+        ):
+            for value in values:
+                with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                    backend.build_camera_view_workflow({**valid, field: value}, "master.png")
+
+    def test_inpaint_can_preserve_pixels_outside_the_mask(self):
+        with patch.object(backend, "save_face_upload", side_effect=lambda _data, label: f"{label}.png"):
+            payload = {"mode": "inpaint", "prompt": "a black hoodie"}
+            standard = backend.build_image_tool_workflow(payload)
+            preserved = backend.build_image_tool_workflow({**payload, "preserve_unmasked": True})
+
+        self.assertEqual(standard["32"]["inputs"]["images"], ["31", 0])
+        self.assertEqual(preserved["32"]["inputs"]["images"], ["33", 0])
+        self.assertEqual(preserved["33"]["class_type"], "ImageCompositeMasked")
+        composite = preserved["33"]["inputs"]
+        self.assertEqual((composite["destination"], composite["source"], composite["mask"]),
+                         (["10", 0], ["31", 0], ["11", 0]))
+
+    def test_mask_from_text_workflow_routes_the_mask_and_clamps_settings(self):
+        prompt = "the shirt · the blue sleeve"
+        for options, expected in (
+            ({}, (0.30, 0, False)),
+            ({"threshold": -1, "grow": -4}, (0.05, 0, False)),
+            ({"threshold": 2, "grow": 100, "invert": True}, (0.95, 64, True)),
+        ):
+            with self.subTest(options=options):
+                workflow = backend.build_mask_from_text_workflow({"prompt": prompt, **options}, "FrojaFace/source.png")
+                threshold, grow, invert = expected
+                self.assertEqual([node["class_type"] for node in workflow.values()], [
+                    "LoadImage", "SAM2Segment", "ThresholdMask",
+                    *(["GrowMask"] if grow else []), "MaskToImage", "SaveImage",
+                ])
+                self.assertEqual(workflow["1"]["inputs"]["image"], "FrojaFace/source.png")
+                segment = workflow["2"]["inputs"]
+                self.assertEqual(segment["image"], ["1", 0])
+                self.assertEqual(segment["prompt"], prompt)
+                self.assertEqual((segment["threshold"], segment["mask_offset"], segment["invert_output"]), (threshold, 0, invert))
+                self.assertEqual(workflow["3"]["inputs"], {"mask": ["2", 1], "value": 0.5})
+                if grow:
+                    self.assertEqual(workflow["4"]["inputs"], {"mask": ["3", 0], "expand": grow, "tapered_corners": True})
+                self.assertEqual(workflow["5"]["inputs"]["mask"], ["4" if grow else "3", 0])
+                self.assertEqual(workflow["6"]["inputs"], {"images": ["5", 0], "filename_prefix": "Froja/maskwords"})
 
     def test_private_video_defaults_to_disabled_in_public_config(self):
         self.assertTrue(callable(backend.wangp_status))
@@ -407,10 +561,11 @@ class LightStageTests(unittest.TestCase):
     def test_relight_workflow_uses_the_light_map(self):
         import base64
         source = "data:image/png;base64," + base64.b64encode((backend.ROOT / "public" / "froja-mark.png").read_bytes()).decode()
-        workflow = backend.build_relight_workflow({"source_image": source, "lights": [{"azimuth": 270}]})
+        with tempfile.TemporaryDirectory() as folder, patch.object(backend, "COMFY_ROOT", Path(folder)):
+            workflow = backend.build_relight_workflow({"source_image": source, "lights": [{"azimuth": 270}]})
+            plain = backend.build_relight_workflow({"source_image": source, "direction": "left"})
         self.assertEqual(workflow["7"]["inputs"]["pixels"], ["12", 0])
         self.assertEqual(workflow["12"]["class_type"], "LoadImage")
-        plain = backend.build_relight_workflow({"source_image": source, "direction": "left"})
         self.assertNotIn("12", plain)
 
 

@@ -1004,7 +1004,7 @@ def build_joyai_workflow(payload: dict) -> dict:
     }
 
 
-def save_face_upload(data_url: str, label: str) -> str:
+def decode_image_upload(data_url: str, label: str) -> tuple[bytes, str]:
     match = re.match(r"^data:image/(png|jpeg|jpg|webp);base64,(.+)$", data_url, flags=re.IGNORECASE | re.DOTALL)
     if not match:
         raise ValueError(f"{label} must be a PNG, JPEG, or WebP image.")
@@ -1012,6 +1012,11 @@ def save_face_upload(data_url: str, label: str) -> str:
     if len(raw) > 25 * 1024 * 1024:
         raise ValueError(f"{label} is larger than 25 MB.")
     extension = "jpg" if match.group(1).lower() in ("jpeg", "jpg") else match.group(1).lower()
+    return raw, extension
+
+
+def save_face_upload(data_url: str, label: str) -> str:
+    raw, extension = decode_image_upload(data_url, label)
     relative = f"FrojaFace/{label.lower()}-{uuid.uuid4().hex}.{extension}"
     destination = COMFY_ROOT / "input" / Path(relative)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1217,7 +1222,231 @@ def build_image_tool_workflow(payload: dict) -> dict:
         denoise = strength
     workflow["30"] = {"class_type": "KSampler", "inputs": {"model": model_ref, "seed": seed, "steps": 4, "cfg": 1.0, "sampler_name": "res_multistep", "scheduler": "simple", "positive": ["4", 0], "negative": ["5", 0], "latent_image": latent_ref, "denoise": denoise}}
     workflow["31"] = {"class_type": "VAEDecode", "inputs": {"samples": ["30", 0], "vae": ["3", 0]}}
-    workflow["32"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": f"Froja/{mode}", "images": ["31", 0]}}
+    output = ["31", 0]
+    if mode == "inpaint" and payload.get("preserve_unmasked") is True:
+        workflow["33"] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["10", 0], "source": output, "mask": ["11", 0],
+            "x": 0, "y": 0, "resize_source": True,
+        }}
+        output = ["33", 0]
+    workflow["32"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": f"Froja/{mode}", "images": output}}
+    return workflow
+
+
+CAMERA_VIEW_PROMPTS = {
+    "rotate_left_45": "将镜头向左旋转45度",
+    "rotate_right_45": "将镜头向右旋转45度",
+    "rotate_left_90": "将镜头向左旋转90度",
+    "rotate_right_90": "将镜头向右旋转90度",
+    "top": "将镜头转为俯视",
+    "low": "将镜头转为仰视",
+    "closeup": "将镜头转为特写镜头",
+    "wide": "将镜头转为广角镜头",
+}
+
+
+CAMERA_SPIN_ANGLES = {
+    "rotate_right_45": "front three-quarter view, 45 degrees to the right of image 1",
+    "rotate_right_90": "right side profile, 90 degrees to the right of image 1",
+    "rotate_left_45": "front three-quarter view, 45 degrees to the left of image 1",
+    "rotate_left_90": "left side profile, 90 degrees to the left of image 1",
+}
+CAMERA_SPIN_REAR_ANGLES = {
+    "rear_right": ("rear three-quarter view, 135 degrees to the right of image 1", "rotate_right_45"),
+    "back": ("straight back view, directly opposite image 1", "rotate_right_90"),
+    "rear_left": ("rear three-quarter view, 135 degrees to the left of image 1", "rotate_left_45"),
+}
+
+CAMERA_AZIMUTHS = {
+    0: (None, "front view"),
+    45: ("rotate_right_45", CAMERA_SPIN_ANGLES["rotate_right_45"]),
+    90: ("rotate_right_90", CAMERA_SPIN_ANGLES["rotate_right_90"]),
+    135: ("rear_right", CAMERA_SPIN_REAR_ANGLES["rear_right"][0]),
+    180: ("back", CAMERA_SPIN_REAR_ANGLES["back"][0]),
+    225: ("rear_left", CAMERA_SPIN_REAR_ANGLES["rear_left"][0]),
+    270: ("rotate_left_90", CAMERA_SPIN_ANGLES["rotate_left_90"]),
+    315: ("rotate_left_45", CAMERA_SPIN_ANGLES["rotate_left_45"]),
+}
+CAMERA_ELEVATIONS = {"low": "low angle, looking up", "eye": "eye level", "high": "high angle, looking down"}
+CAMERA_DISTANCES = {"wide": "wide shot", "medium": "medium shot", "closeup": "close-up"}
+CAMERA_IDENTITY_PROMPT = (
+    " Keep exactly the same person from image 1: same face, hair, skin, body shape, clothing and colours."
+    " Keep the same background location. The person stays still and only the camera position changes."
+)
+CAMERA_GUIDE_PROMPT = " Image 2 guides the camera angle only. Use image 1 for the person, setting and framing."
+
+
+def camera_position_prompt(azimuth, elevation, distance, has_guide=False) -> str:
+    if type(azimuth) is not int or azimuth not in CAMERA_AZIMUTHS:
+        raise ValueError("Choose a camera angle from 0 to 315 degrees in 45-degree steps.")
+    if not isinstance(elevation, str) or elevation not in CAMERA_ELEVATIONS:
+        raise ValueError("Choose a low angle, eye level, or a high angle.")
+    if not isinstance(distance, str) or distance not in CAMERA_DISTANCES:
+        raise ValueError("Choose wide, medium, or close-up distance.")
+
+    instruction, target = CAMERA_AZIMUTHS[azimuth]
+    commands = []
+    if instruction in CAMERA_VIEW_PROMPTS:
+        commands.append(CAMERA_VIEW_PROMPTS[instruction])
+    elif instruction in CAMERA_SPIN_REAR_ANGLES:
+        if has_guide:
+            rotation = CAMERA_SPIN_REAR_ANGLES[instruction][1]
+            commands.append(f"From the camera position in image 2: {CAMERA_VIEW_PROMPTS[rotation]}")
+        else:
+            direction = "右" if azimuth <= 180 else "左"
+            commands.append(f"将镜头向{direction}旋转{min(azimuth, 360 - azimuth)}度")
+    if elevation != "eye":
+        commands.append(CAMERA_VIEW_PROMPTS["top" if elevation == "high" else "low"])
+    if distance != "medium":
+        commands.append(CAMERA_VIEW_PROMPTS[distance])
+    commands.append(f"Move the camera to a {target} at {CAMERA_ELEVATIONS[elevation]}, {CAMERA_DISTANCES[distance]}.")
+    prompt = "。 ".join(commands) + CAMERA_IDENTITY_PROMPT
+    if azimuth == 180:
+        prompt += " Show the back of the head and body, with the face fully hidden."
+    if distance == "medium":
+        prompt += " Keep the subject about the same size as in image 1."
+    if has_guide:
+        prompt += CAMERA_GUIDE_PROMPT if distance == "medium" else (
+            " Image 2 guides the camera angle only. Use image 1 for the person and setting."
+        )
+    return prompt
+
+
+def build_camera_view_workflow(payload: dict, image_name: str, guide_name: str | None = None) -> dict:
+    instruction = payload.get("instruction")
+    positioned = any(field in payload for field in ("azimuth", "elevation", "distance"))
+    if not positioned and (not isinstance(instruction, str) or (
+        instruction not in CAMERA_VIEW_PROMPTS and instruction not in CAMERA_SPIN_REAR_ANGLES
+    )):
+        raise ValueError("Choose a supported camera instruction.")
+    seed = payload.get("seed", -1)
+    if type(seed) is not int or not -1 <= seed < 2**64:
+        raise ValueError("Use a whole-number seed from 0 to 2⁶⁴ − 1, or −1 for a random seed.")
+    if seed == -1:
+        seed = random.randrange(2**32)
+
+    if positioned:
+        prompt = camera_position_prompt(payload.get("azimuth"), payload.get("elevation", "eye"),
+                                        payload.get("distance", "medium"), bool(guide_name))
+    elif instruction in CAMERA_SPIN_REAR_ANGLES:
+        if not guide_name:
+            raise ValueError("Choose a generated side view as the angle guide.")
+        target, rotation = CAMERA_SPIN_REAR_ANGLES[instruction]
+        prompt = f"From the camera position in image 2: {CAMERA_VIEW_PROMPTS[rotation]}。 Target: {target}."
+    else:
+        prompt = CAMERA_VIEW_PROMPTS[instruction]
+        if instruction in CAMERA_SPIN_ANGLES:
+            prompt = f"{prompt}。 Move the camera from image 1 to a {CAMERA_SPIN_ANGLES[instruction]}."
+
+    if not positioned and (instruction in CAMERA_SPIN_ANGLES or instruction in CAMERA_SPIN_REAR_ANGLES):
+        prompt += CAMERA_IDENTITY_PROMPT + (
+            " Match the subject size, headroom and crop in image 1. Keep the full body in frame if it is visible"
+            " in image 1. Do not zoom in or out."
+        )
+        if guide_name:
+            prompt += CAMERA_GUIDE_PROMPT
+
+    workflow = {
+        "1": {"class_type": "LoadImage", "inputs": {"image": image_name}},
+        "2": {"class_type": "ImageScaleToTotalPixels", "inputs": {
+            "image": ["1", 0], "upscale_method": "lanczos", "megapixels": 0.5, "resolution_steps": 16,
+        }},
+        "3": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": "qwen_image_edit_2509_fp8_e4m3fn.safetensors", "weight_dtype": "default",
+        }},
+        "4": {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": ["3", 0], "lora_name": "Qwen-Edit-2509-Multiple-angles.safetensors", "strength_model": 0.8,
+        }},
+        "5": {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": ["4", 0], "lora_name": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+            "strength_model": 1.0,
+        }},
+        "6": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["5", 0], "shift": 3.1}},
+        "7": {"class_type": "CFGNorm", "inputs": {"model": ["6", 0], "strength": 1.0}},
+        "8": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default",
+        }},
+        "9": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
+        "10": {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {
+            "clip": ["8", 0], "vae": ["9", 0], "image1": ["1", 0], "prompt": prompt,
+        }},
+        "11": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["10", 0]}},
+        "12": {"class_type": "VAEEncode", "inputs": {"pixels": ["2", 0], "vae": ["9", 0]}},
+        "13": {"class_type": "KSampler", "inputs": {
+            "model": ["7", 0], "seed": seed, "steps": 4, "cfg": 1.0,
+            "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
+            "positive": ["10", 0], "negative": ["11", 0], "latent_image": ["12", 0],
+        }},
+        "14": {"class_type": "VAEDecode", "inputs": {"samples": ["13", 0], "vae": ["9", 0]}},
+        "16": {"class_type": "GetImageSize", "inputs": {"image": ["1", 0]}},
+        "17": {"class_type": "ImageScale", "inputs": {
+            "image": ["14", 0], "upscale_method": "lanczos", "crop": "disabled",
+            "width": ["16", 0], "height": ["16", 1],
+        }},
+        "15": {"class_type": "SaveImage", "inputs": {"images": ["17", 0], "filename_prefix": "Froja/Spin360/view"}},
+    }
+    if guide_name:
+        workflow["18"] = {"class_type": "LoadImage", "inputs": {"image": guide_name}}
+        workflow["10"]["inputs"]["image2"] = ["18", 0]
+    return workflow
+
+
+def upload_camera_view_image(raw: bytes, filename: str) -> str:
+    boundary = uuid.uuid4().hex
+    header = (
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="subfolder"\r\n\r\nFrojaSpin\r\n'
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="image"; filename="{filename}"\r\n'
+        "Content-Type: application/octet-stream\r\n\r\n"
+    )
+    request = urllib.request.Request(
+        COMFY_URL + "/upload/image",
+        data=header.encode("ascii") + raw + f"\r\n--{boundary}--\r\n".encode("ascii"),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        upload = json.load(response)
+    return f"{upload['subfolder']}/{upload['name']}"
+
+
+def build_mask_from_text_workflow(payload: dict, image_name: str) -> dict:
+    prompt = payload.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("Describe the area you want to mask.")
+    try:
+        threshold = max(0.05, min(0.95, float(payload.get("threshold", 0.30))))
+        grow = max(0, min(64, int(payload.get("grow", 0))))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Use a number for the threshold and a whole number for mask growth.") from exc
+    invert = payload.get("invert", False)
+    if not isinstance(invert, bool):
+        raise ValueError("Invert must be true or false.")
+
+    workflow = {
+        "1": {"class_type": "LoadImage", "inputs": {"image": image_name}},
+        "2": {"class_type": "SAM2Segment", "inputs": {
+            "image": ["1", 0],
+            "prompt": prompt,
+            "sam2_model": "sam2.1_hiera_small",
+            "dino_model": "GroundingDINO_SwinT_OGC (694MB)",
+            "device": "Auto",
+            "threshold": threshold,
+            "mask_blur": 0,
+            "mask_offset": 0,
+            "invert_output": invert,
+            "background": "Alpha",
+            "background_color": "#222222",
+        }},
+        "3": {"class_type": "ThresholdMask", "inputs": {"mask": ["2", 1], "value": 0.5}},
+    }
+    mask_ref = ["3", 0]
+    if grow:
+        # SAM2Segment applies its offset repeatedly, so grow by pixels here.
+        workflow["4"] = {"class_type": "GrowMask", "inputs": {"mask": mask_ref, "expand": grow, "tapered_corners": True}}
+        mask_ref = ["4", 0]
+    workflow["5"] = {"class_type": "MaskToImage", "inputs": {"mask": mask_ref}}
+    workflow["6"] = {"class_type": "SaveImage", "inputs": {"images": ["5", 0], "filename_prefix": "Froja/maskwords"}}
     return workflow
 
 
@@ -3556,6 +3785,71 @@ class FrojaHandler(SimpleHTTPRequestHandler):
                 return json_response(self, {"prompt_id": result["prompt_id"]})
             except Exception as exc:
                 return json_response(self, {"error": str(exc)}, 500)
+        if self.path == "/api/camera-view":
+            try:
+                payload = read_json_body(self)
+                if not isinstance(payload, dict) or not isinstance(payload.get("image"), str):
+                    raise ValueError("Choose a PNG, JPEG, or WebP image.")
+                raw, extension = decode_image_upload(payload["image"], "Image")
+                guide = payload.get("guide_image")
+                if guide is not None and not isinstance(guide, str):
+                    raise ValueError("Choose a PNG, JPEG, or WebP angle guide.")
+                guide_upload = decode_image_upload(guide, "Angle guide") if guide is not None else None
+                workflow = build_camera_view_workflow(payload, "", "guide" if guide_upload else None)
+                for requester in (extension_comfy_request, joyai_request, sensenova_request):
+                    if engine_has_queued_work(requester):
+                        return json_response(self, {"error": "Another Froja engine is still generating. Try again when it finishes."}, 409)
+                release_engine_memory("extension", "joyai", "sensenova", "ollama")
+                if not start_comfy():
+                    return json_response(self, {"error": "The main ComfyUI engine could not start."}, 503)
+                workflow["1"]["inputs"]["image"] = upload_camera_view_image(raw, f"{uuid.uuid4().hex}.{extension}")
+                if guide_upload:
+                    guide_raw, guide_extension = guide_upload
+                    workflow["18"]["inputs"]["image"] = upload_camera_view_image(
+                        guide_raw, f"{uuid.uuid4().hex}.{guide_extension}",
+                    )
+                result = comfy_request("/prompt", {"prompt": workflow, "client_id": "froja-spin360"}, timeout=30)
+                if not result.get("prompt_id"):
+                    return json_response(self, {"error": "The camera view could not be queued."}, 502)
+                return json_response(self, {"prompt_id": result["prompt_id"]})
+            except json.JSONDecodeError:
+                return json_response(self, {"error": "Send a source image and a camera instruction."}, 400)
+            except ValueError as exc:
+                return json_response(self, {"error": str(exc)}, 400)
+            except Exception as exc:
+                self.log_error("Camera view could not queue a job: %s", exc)
+                return json_response(self, {"error": str(exc)}, 502)
+        if self.path == "/api/mask-from-text":
+            try:
+                if engine_has_queued_work(comfy_request):
+                    return json_response(self, {"error": "The main image engine is working. Try again when it finishes."}, 409)
+                release_engine_memory("main", "joyai", "sensenova", "ollama")
+                if not start_extension_comfy():
+                    return json_response(self, {"error": "The Mask by words engine could not start."}, 503)
+                if "SAM2Segment" not in extension_comfy_request("/object_info/SAM2Segment"):
+                    return json_response(self, {"error": "Mask by words needs the ComfyUI-RMBG nodes."}, 503)
+                payload = read_json_body(self)
+                if not isinstance(payload, dict):
+                    return json_response(self, {"error": "Send a source image and a description of the area to mask."}, 400)
+                source = payload.get("image")
+                if not isinstance(source, str) or not source:
+                    return json_response(self, {"error": "Choose a source image first."}, 400)
+                try:
+                    image_name = save_face_upload(source, "maskwords")
+                except ValueError:
+                    return json_response(self, {"error": "Choose a valid PNG, JPEG, or WebP source image up to 25 MB."}, 400)
+                workflow = build_mask_from_text_workflow(payload, image_name)
+                result = extension_comfy_request("/prompt", {"prompt": workflow, "client_id": "froja-maskwords"}, timeout=30)
+                if not result.get("prompt_id"):
+                    return json_response(self, {"error": "The Mask by words workflow could not be queued."}, 502)
+                return json_response(self, {"prompt_id": result["prompt_id"]})
+            except json.JSONDecodeError:
+                return json_response(self, {"error": "Send a source image and a description of the area to mask."}, 400)
+            except ValueError as exc:
+                return json_response(self, {"error": str(exc)}, 400)
+            except Exception as exc:
+                self.log_error("Mask by words could not queue a job: %s", exc)
+                return json_response(self, {"error": "Could not start Mask by words. Try again in a moment."}, 502)
         if self.path == "/api/relight/light-map":
             try:
                 payload = read_json_body(self)
@@ -3620,6 +3914,21 @@ class FrojaHandler(SimpleHTTPRequestHandler):
                 return json_response(self, {"prompt_id": result["prompt_id"], "number": result.get("number")})
             except Exception as exc:
                 return json_response(self, {"error": str(exc)}, 500)
+        if self.path == "/api/studio-4d/stop":
+            try:
+                payload = read_json_body(self)
+                prompt_id = str(uuid.UUID(payload["prompt_id"]))
+                requester = {"main": comfy_request, "extension": extension_comfy_request}[payload["engine"]]
+            except (AttributeError, KeyError, TypeError, ValueError):
+                return json_response(self, {"error": "Choose a running studio job to stop."}, 400)
+            try:
+                requester(f"/api/jobs/{prompt_id}/cancel", {}, timeout=10)
+                queue = requester("/queue", timeout=10)
+                active = any(item[1] == prompt_id for key in ("queue_running", "queue_pending") for item in queue[key])
+                return json_response(self, {"stopped": not active})
+            except Exception as exc:
+                self.log_error("4D Studio could not stop a job: %s", exc)
+                return json_response(self, {"error": "Could not stop the job. Check the image engine and try again."}, 502)
         if self.path == "/api/interrupt":
             try:
                 comfy_request("/interrupt", {}, timeout=10)
