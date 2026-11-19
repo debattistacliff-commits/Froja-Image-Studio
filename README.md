@@ -12,7 +12,7 @@
   <strong>Create step by step · 164 Styles &amp; Artists · Workflow Builder · Cameras · 23 tools · 3D Relight room · Video with sound · Training · System monitor</strong>
 </p>
 
-> **Project status:** active work in progress. The main generation workflow is usable today; some advanced workflows are experimental and depend on the ComfyUI nodes and models installed on your computer.
+> **Project status:** active work in progress — I'm updating Froja regularly to keep improving it. The main generation workflow is usable today; tools marked **TEST** are new and still being refined, and some advanced workflows depend on the ComfyUI nodes and models installed on your computer. See [What's next](#whats-next) — feedback and ideas are very welcome.
 
 ![Froja studios slider](docs/screenshots/01-studios.jpg)
 
@@ -76,6 +76,17 @@ Camera views use Qwen-Image-Edit-2509 with the *Multiple-angles* and *Lightning*
 | ![Create — model and generate](docs/screenshots/04-create-generate.jpg) | ![Tools slider](docs/screenshots/05-tools.jpg) |
 | ![3D Relight room](docs/screenshots/06-relight-3d-room.jpg) | ![System monitor](docs/screenshots/07-system-monitor.jpg) |
 | ![Video Studio](docs/screenshots/08-video-studio.jpg) | ![Pink LED colour](docs/screenshots/09-led-colours-pink.jpg) |
+
+## What's next
+
+Froja keeps growing. Coming in the next updates:
+
+- **Animate** — bring the person and the background to life (waves, wind, breathing, a turn of the head) and move the camera with presets such as orbit, push-in, crane and bullet-time, using local video models.
+- **Capture Studio** — a virtual capture booth: cameras all around the person, a glowing dot (point-cloud) view, and **Send to Blender** for 3D scenes and renders.
+- **Polish of the TEST tools** — 4D Studio, 360° Spin and Mask by words get faster and more consistent with every release.
+- **Your ideas** — open an [issue](../../issues) or start a discussion; suggestions shape what comes next.
+
+Follow or ⭐ the repository to be notified of new releases.
 
 ## Why Froja?
 
