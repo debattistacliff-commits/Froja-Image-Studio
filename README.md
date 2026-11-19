@@ -16,6 +16,13 @@
 
 ![Froja studios slider](docs/screenshots/01-studios.jpg)
 
+## ▶ Watch the 3-minute guided tour
+
+[![Froja guided tour — click to watch](docs/images/froja-guided-tour-poster.jpg)](https://github.com/debattistacliff-commits/Froja-Image-Studio/releases/download/v0.2.4/froja-guided-tour.mp4)
+
+A narrated walk-through: write an idea, let Ollama improve it, pick a style and camera, generate, turn a picture into a tested ComfyUI workflow, and relight a portrait in the 3D light room. Everything in the video — pictures, animation, music and voice — was made locally with Froja and open models.
+
+
 ## What's new in 0.2.2
 
 - **Workflow Builder studio — Picture to Workflow.** Drop in a picture (or type an idea): Ollama describes it, Froja builds a real ComfyUI workflow from the nodes and models *you* have, test-runs it and shows the result. Only tested workflows can be exported.
