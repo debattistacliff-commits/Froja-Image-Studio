@@ -12,10 +12,13 @@ import SenseNovaStudio from "./sensenova-studio";
 import LLaDAStudio from "./llada-studio";
 import KreaFastStudio from "./krea-fast-studio";
 import VariationLab from "./variation-lab";
+import Spin360 from "./spin-360";
+import Studio4D from "./studio-4d";
 import PromptBatchStudio from "./prompt-batch-studio";
 import WorkflowBuilder from "./workflow-builder";
 import SettingsStudio from "./settings-studio";
 import PortraitTransformer from "./portrait-transformer";
+import MaskByWords from "./mask-by-words";
 import ToolDeck from "./tool-deck";
 import type { DeckTool } from "./tool-deck";
 import "./tool-deck.css";
@@ -998,6 +1001,7 @@ export default function Home() {
   >("");
   const [toolSource, setToolSource] = useState("");
   const [toolMask, setToolMask] = useState("");
+  const generatedToolMask = useRef(false);
   const [toolJob, setToolJob] = useState("");
   const [toolResult, setToolResult] = useState("");
   const [toolState, setToolState] = useState("Ready");
@@ -1051,6 +1055,8 @@ export default function Home() {
   const [lladaOpen,setLladaOpen]=useState(false);
   const [kreaFastOpen,setKreaFastOpen]=useState(false);
   const [variationLabOpen,setVariationLabOpen]=useState(false);
+  const [spin360Open, setSpin360Open] = useState(false);
+  const [studio4DOpen, setStudio4DOpen] = useState(false);
   const [promptBatchOpen,setPromptBatchOpen]=useState(false);
   const [portraitTransformerOpen,setPortraitTransformerOpen]=useState(false);
   const [trainingStudioOpen,setTrainingStudioOpen]=useState(false); const [trainingSessionLoaded,setTrainingSessionLoaded]=useState(false); const [trainingSession,setTrainingSession]=useState("Froja_Training_001"); const [trainingType,setTrainingType]=useState("Character"); const [trainingConcept,setTrainingConcept]=useState(""); const [trainingShots,setTrainingShots]=useState<string[]>(trainingShotOptions.Character.map(item=>item[0])); const [trainingEnvironments,setTrainingEnvironments]=useState<string[]>(["Studio"]); const [trainingImagesPerSetup,setTrainingImagesPerSetup]=useState(1); const [trainingQueue,setTrainingQueue]=useState<TrainingTask[]>([]); const [trainingJob,setTrainingJob]=useState(""); const [trainingPending,setTrainingPending]=useState({name:"",position:"",environment:"",prompt:""}); const [trainingResults,setTrainingResults]=useState<TrainingResult[]>([]); const [trainingState,setTrainingState]=useState("Ready"); const [trainingGalleryGroup,setTrainingGalleryGroup]=useState("Setup");
@@ -1968,6 +1974,7 @@ export default function Home() {
     setToolMode(mode);
     setToolSource("");
     setToolMask("");
+    generatedToolMask.current = false;
     setToolResult("");
     setToolState("Ready");
   }
@@ -2364,6 +2371,7 @@ export default function Home() {
     { name: "LLaDA Studio", symbol: "layers", badge: "INT8", icon: <Icon name="enhance" />, description: "Create images with the LLaDA model.", open: () => setLladaOpen(true) },
     { name: "Krea Fast Studio", symbol: "bolt", badge: "4×", icon: <Icon name="speed" />, description: "Quick drafts with Krea — four images fast.", open: () => setKreaFastOpen(true) },
     { name: "Variation Lab", symbol: "hexdots", badge: "6", icon: <Icon name="variants" />, description: "Make six variations of one idea and pick the best.", open: () => setVariationLabOpen(true) },
+    { name: "360° Spin", symbol: "cycle", badge: "TEST", description: "Turn one picture into eight camera views you can drag through.", open: () => setSpin360Open(true) },
     { name: "RedNode Studio", symbol: "nodes", badge: "PLAN B", icon: <Icon name="workflow" />, description: "Open the node workflow studio in a new window.", open: () => { window.open("http://127.0.0.1:9061", "froja-rednode-studio", "noopener,noreferrer"); } },
     { name: "Prompt Batch Studio", symbol: "queue", badge: "QUEUE", icon: <Icon name="workflow" />, description: "Queue many prompts and let Froja work through them.", open: () => setPromptBatchOpen(true) },
     { name: "My Portrait Transformer", symbol: "portrait", badge: "KREA-2", icon: <Icon name="face" />, description: "Turn your portrait into new characters and styles.", open: () => setPortraitTransformerOpen(true) },
@@ -2382,6 +2390,7 @@ export default function Home() {
     { name: t("repair"), symbol: "wrench", icon: <Icon name="repair" />, description: "Fix hands, faces and small mistakes.", open: () => setRepairOpen(true) },
     { name: t("smart"), symbol: "wand", icon: <Icon name="wand" />, description: "Edit a picture by simply describing the change.", open: () => setJoyaiOpen(true) },
     { name: "Video Studio", symbol: "film", badge: videoEngine.online ? "READY" : "PRIVATE", icon: <Icon name="video" />, description: "Make short videos from text or pictures.", open: () => setVideoOpen(true) },
+    { name: "4D Studio", symbol: "cube", badge: "TEST", icon: <Icon name="cube" />, description: "Edit one master picture and create new camera views of the same person.", open: () => setStudio4DOpen(true) },
   ];
 
   // Studios that live in their own window (Video, Training, Library, Settings) go back to the slider when it closes.
@@ -2397,7 +2406,7 @@ export default function Home() {
   }, [stationWindowOpen]);
   const anyToolOpen = imagePromptOpen || senseNovaOpen || lladaOpen || kreaFastOpen || variationLabOpen || promptBatchOpen ||
     portraitTransformerOpen || trainingStudioOpen || sketch3DOpen || referenceComposerOpen || datasetOpen || enhanceOpen ||
-    !!toolMode || faceOpen || transformOpen || relightOpen || repairOpen || joyaiOpen || videoOpen;
+    !!toolMode || faceOpen || transformOpen || relightOpen || repairOpen || joyaiOpen || videoOpen || spin360Open || studio4DOpen;
   const createSteps = [
     { id: "prompt", label: "Prompt" },
     { id: "style", label: "Style & Artists" },
@@ -3030,32 +3039,44 @@ export default function Home() {
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   onChange={(e) =>
-                    loadFaceFile(e.target.files?.[0], setToolSource)
+                    loadFaceFile(e.target.files?.[0], (image) => {
+                      if (toolMode === "inpaint" && generatedToolMask.current && image !== toolSource) {
+                        generatedToolMask.current = false;
+                        setToolMask("");
+                      }
+                      setToolSource(image);
+                    })
                   }
                 />
                 {toolSource ? (
-                  <img src={toolSource} alt="Source image for editing" />
+                  <div className="mask-words-source">
+                    <img src={toolSource} alt="Source image for editing" />
+                    {toolMode === "inpaint" && toolMask && (
+                      <span
+                        className="mask-words-overlay"
+                        role="img"
+                        aria-label="Selected area highlighted in blue"
+                        style={{ "--inpaint-mask": `url("${toolMask}")` } as CSSProperties}
+                      />
+                    )}
+                  </div>
                 ) : (
                   <span>Choose an image</span>
                 )}
               </label>
               {toolMode === "inpaint" && (
-                <label className="tool-upload">
-                  <b>Mask image</b>
-                  <small>White = replace, black = preserve</small>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={(e) =>
-                      loadFaceFile(e.target.files?.[0], setToolMask)
-                    }
-                  />
-                  {toolMask ? (
-                    <img src={toolMask} alt="Inpainting mask" />
-                  ) : (
-                    <span>Choose a matching mask</span>
-                  )}
-                </label>
+                <MaskByWords
+                  source={toolSource}
+                  mask={toolMask}
+                  onUpload={(file) => loadFaceFile(file, (mask) => {
+                    generatedToolMask.current = false;
+                    setToolMask(mask);
+                  })}
+                  onMaskChange={(mask) => {
+                    generatedToolMask.current = Boolean(mask);
+                    setToolMask(mask);
+                  }}
+                />
               )}
             </div>
             <label className="tool-prompt">
@@ -3205,9 +3226,9 @@ export default function Home() {
             <header>
               <div>
                 <h2>Froja Relight</h2>
-                <p>Place up to three lights around your picture in the 3D room, then let IC-Light relight it.</p>
+                <p>Place up to three lights around your picture, then let IC-Light relight it.</p>
               </div>
-              <button onClick={() => setRelightOpen(false)}>×</button>
+              <button type="button" aria-label="Close Relight" onClick={() => setRelightOpen(false)}>×</button>
             </header>
             {toolMode === "krea2-reference" && (
               <div className="face-note">
@@ -3239,6 +3260,7 @@ export default function Home() {
                 </div>
               )}
             </div>
+            <LightStage image={relightSource} lights={relightLights} ambient={relightAmbient} onLights={setRelightLights} onAmbient={setRelightAmbient} />
             <label className="tool-prompt">
               Lighting description (optional — the lights you placed are added automatically)
               <textarea
@@ -3247,7 +3269,6 @@ export default function Home() {
                 placeholder="Warm window light, cinematic shadows, soft rim light…"
               />
             </label>
-            <LightStage image={relightSource} lights={relightLights} ambient={relightAmbient} onLights={setRelightLights} onAmbient={setRelightAmbient} />
             <label className="tool-range">
               Relighting strength <b>{relightStrength.toFixed(2)}</b>
               <input
@@ -3624,6 +3645,8 @@ export default function Home() {
       {kreaFastOpen && <KreaFastStudio onClose={()=>setKreaFastOpen(false)} initialPrompt={prompt} />}
 
       {variationLabOpen && <VariationLab onClose={()=>setVariationLabOpen(false)} checkpoint={checkpoint} architecture={current?.architecture} width={width} height={height} seed={seed} loras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))} />}
+      <Spin360 open={spin360Open} onClose={() => setSpin360Open(false)} />
+      <Studio4D open={studio4DOpen} onClose={() => setStudio4DOpen(false)} />
 
       {station === "workflows" && <WorkflowBuilder onClose={() => setStation("")} checkpoint={checkpoint} negative={negative} steps={steps} cfg={cfg} width={width} height={height} sampler={sampler} stylePrompt={styleEnabled ? artStylePrompts[style] || "" : ""} />}
       {promptBatchOpen && <PromptBatchStudio onClose={()=>setPromptBatchOpen(false)} checkpoint={checkpoint} architecture={current?.architecture} negative={negative} steps={steps} cfg={cfg} width={width} height={height} sampler={sampler} stylePrompt={styleEnabled ? artStylePrompts[style]||"" : ""} loras={selectedLoras.map(item=>({relative:item.relative,strength:item.strength}))} />}

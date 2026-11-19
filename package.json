@@ -1,6 +1,6 @@
 {
   "name": "froja-image-studio",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "A modern local-first image studio for ComfyUI, Ollama, and user-owned model libraries.",
   "license": "MIT",
   "author": "debattistacliff-commits",
@@ -27,7 +27,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "start": "python backend.py",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/image-sizes.test.mts && node scripts/run-python-tests.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/image-sizes.test.mts tests/studio-4d-camera.test.mts && node scripts/run-python-tests.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
