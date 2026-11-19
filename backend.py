@@ -1536,11 +1536,22 @@ def start_joyai() -> bool:
 
 
 def start_extension_comfy() -> bool:
-    global extension_comfy_process
+    global extension_comfy_process, EXTENSION_COMFY_URL
     if extension_comfy_ready():
         return True
     if not COMFY_PYTHON.exists():
         return False
+    parsed = urllib.parse.urlparse(EXTENSION_COMFY_URL)
+    host = parsed.hostname or "127.0.0.1"
+    if not local_port_available(host, int(parsed.port or 9001)):
+        # Windows sometimes reserves whole port ranges (Hyper-V / WinNAT, e.g. 8999-9298).
+        # Pick a safe free port instead of failing; the main engine uses 8400 and its own fallbacks.
+        main_port = int(urllib.parse.urlparse(COMFY_URL).port or 0)
+        fallback = next((port for port in (8500, 8590, 8690, 8790, 8890, 7860, 7960)
+                         if port != main_port and local_port_available(host, port)), None)
+        if fallback is None:
+            return False
+        EXTENSION_COMFY_URL = f"http://{host}:{fallback}"
     LOGS.mkdir(exist_ok=True)
     face_user = ROOT / "runtime" / "face-user"
     face_user.mkdir(parents=True, exist_ok=True)
