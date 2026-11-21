@@ -995,7 +995,8 @@ export default function Home() {
   const stationWindowWasOpen = useRef(false);
   const [ledColor, setLedColor] = useState(() => { try { return localStorage.getItem("froja-led-color") || "blue"; } catch { return "blue"; } });
   useEffect(() => { try { localStorage.setItem("froja-led-color", ledColor); } catch { /* ignore */ } }, [ledColor]);
-  const [, setAppearanceOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [appearanceOnly, setAppearanceOnly] = useState(false);
   const [toolMode, setToolMode] = useState<
     "img2img" | "inpaint" | "controlnet" | "krea2-reference" | ""
   >("");
@@ -2375,8 +2376,8 @@ export default function Home() {
     { name: "RedNode Studio", symbol: "nodes", badge: "PLAN B", icon: <Icon name="workflow" />, description: "Open the node workflow studio in a new window.", open: () => { window.open("http://127.0.0.1:9061", "froja-rednode-studio", "noopener,noreferrer"); } },
     { name: "Prompt Batch Studio", symbol: "queue", badge: "QUEUE", icon: <Icon name="workflow" />, description: "Queue many prompts and let Froja work through them.", open: () => setPromptBatchOpen(true) },
     { name: "My Portrait Transformer", symbol: "portrait", badge: "KREA-2", icon: <Icon name="face" />, description: "Turn your portrait into new characters and styles.", open: () => setPortraitTransformerOpen(true) },
-    { name: "Materials & Appearance", symbol: "sphere", badge: materialReferences.length || "OPEN", icon: <Icon name="material" />, description: "Pick materials, hair, fabric and landscapes for your prompt.", open: () => { setAppearanceCategory("Materials"); setTrainingStudioOpen(true); } },
-    { name: "Froja Training Studio", symbol: "target", badge: trainingResults.length || "NEW", icon: <Icon name="train" />, description: "Train Froja on a character or subject.", open: () => setTrainingStudioOpen(true) },
+    { name: "Materials & Appearance", symbol: "sphere", badge: materialReferences.length || "OPEN", icon: <Icon name="material" />, description: "Pick materials, hair, fabric and landscapes for your prompt.", open: () => { setAppearanceCategory("Materials"); setAppearanceOnly(true); setAppearanceOpen(true); setTrainingStudioOpen(true); } },
+    { name: "Froja Training Studio", symbol: "target", badge: trainingResults.length || "NEW", icon: <Icon name="train" />, description: "Train Froja on a character or subject.", open: () => { setAppearanceOnly(false); setAppearanceOpen(false); setTrainingStudioOpen(true); } },
     { name: "Sketch & 3D Studio", symbol: "cube", badge: "3D", icon: <Icon name="cube" />, description: "Turn a sketch into a finished picture or a 3D look.", open: () => setSketch3DOpen(true) },
     { name: "Reference Composer", symbol: "compose", badge: "5", icon: <Icon name="compose" />, description: "Combine up to five reference images into one scene.", open: () => setReferenceComposerOpen(true) },
     { name: "LoRA Dataset Studio", symbol: "database", badge: datasetItems.length || "ADD", icon: <Icon name="dataset" />, description: "Collect and caption pictures to train a LoRA.", open: () => setDatasetOpen(true) },
@@ -2498,10 +2499,10 @@ export default function Home() {
           <button className="sketch3d-nav" onClick={() => setPortraitTransformerOpen(true)}>
             <Icon name="face" /><span>My Portrait Transformer</span><i>Krea-2</i>
           </button>
-          <button className="training-nav" onClick={() => { setAppearanceCategory("Materials"); setTrainingStudioOpen(true); }}>
+          <button className="training-nav" onClick={() => { setAppearanceCategory("Materials"); setAppearanceOnly(true); setAppearanceOpen(true); setTrainingStudioOpen(true); }}>
             <Icon name="create" /><span>Materials &amp; Appearance</span><i>{materialReferences.length || "Open"}</i>
           </button>
-          <button className="training-nav" onClick={() => setTrainingStudioOpen(true)}>
+          <button className="training-nav" onClick={() => { setAppearanceOnly(false); setAppearanceOpen(false); setTrainingStudioOpen(true); }}>
             <Icon name="create" /><span>Froja Training Studio</span><i>{trainingResults.length || "New"}</i>
           </button>          <button className="sketch3d-nav" onClick={() => setSketch3DOpen(true)}>
             <Icon name="model" /><span>Sketch &amp; 3D Studio</span><i>3D</i>
@@ -3668,10 +3669,10 @@ export default function Home() {
 
       {trainingStudioOpen && (
         <div className="modal training-modal" onClick={()=>setTrainingStudioOpen(false)}>
-          <div className="training-workspace with-appearance" onClick={event=>event.stopPropagation()}>
+          <div className={`training-workspace${appearanceOpen||appearanceOnly?" with-appearance":""}${appearanceOnly?" appearance-only":""}`} onClick={event=>event.stopPropagation()}>
             <header className="training-head"><div><h2>✦ Froja Training Studio</h2><p>Generate eight consistent images in different positions, angles and environments for professional LoRA training.</p></div><span><button onClick={()=>{setTrainingResults([]);setTrainingQueue([]);setTrainingShots(trainingShotOptions[trainingType].map(([name])=>name));setTrainingEnvironments(["Studio"]);setTrainingImagesPerSetup(1);setTrainingSession(`Froja_Training_${Date.now().toString().slice(-5)}`);setTrainingState("New eight-image session ready.");}}>+ New Session</button><button className="appearance-toggle" onClick={()=>setAppearanceOpen(value=>!value)}>◉ Appearance Extension</button><button className="prompt-cards-toggle" onClick={()=>setPromptCardsOpen(value=>!value)}>▦ Prompt Cards</button><button onClick={()=>setTrainingStudioOpen(false)}>×</button></span></header>
-            <aside className="appearance-extension appearance-library">
-              <header><h3>Appearance Library</h3></header>
+            {(appearanceOpen||appearanceOnly)&&<aside className="appearance-extension appearance-library">
+              <header><h3>{appearanceOnly?"Materials & Appearance":"Appearance Library"}</h3>{appearanceOnly&&<button className="appearance-close" aria-label="Close Materials & Appearance" onClick={()=>setTrainingStudioOpen(false)}>×</button>}</header>
 
               <nav className="appearance-tabs">{["Materials","Body","Hair","Hands","Landscapes","Fabric"].map(category=><button key={category} className={appearanceCategory===category?"selected":""} onClick={()=>setAppearanceCategory(category)}><i>{appearanceLibrary[category].icon}</i><span>{appearanceLibrary[category].label}</span></button>)}</nav>
               {appearanceCategory==="Materials"&&<div className="material-library-tools"><span><b>My Material Folder</b><small>{materialLibraryState}</small></span><button onClick={async()=>{await fetch("/api/materials/open-folder",{method:"POST"});setMaterialLibraryState("Folder opened — add PNG, JPG or WebP files, then rescan.");}}>Open Folder</button><button onClick={loadMaterialLibrary}>Rescan</button>{materialFolder&&<em title={materialFolder}>{materialFolder}</em>}</div>}
@@ -3682,9 +3683,9 @@ export default function Home() {
                 <label className="appearance-target"><span>Apply selection to</span><select value={appearanceTarget} onChange={event=>setAppearanceTarget(event.target.value)}><option>Main object / subject</option><option>Background / environment</option><option>Clothing / accessories</option><option>Complete image</option></select></label><section className="appearance-finish"><b>Style Finish</b><div><button className="selected">Natural</button><button>Balanced</button><button>Styled</button><button>Weathered</button></div></section>
               </>})()}
               <label className="appearance-lock"><span><b>Consistency Lock</b><small>Lock selected appearance across all eight outputs</small></span><input type="checkbox" checked={appearanceConsistency} onChange={event=>setAppearanceConsistency(event.target.checked)}/></label>
-              <button className="appearance-apply" onClick={()=>setTrainingState(`Appearance Library applied to all ${trainingShots.length*trainingEnvironments.length*trainingImagesPerSetup} planned images.`)}>Apply appearance to all 8</button>
+              {appearanceOnly?<button className="appearance-apply" onClick={()=>{const text=Object.entries(appearanceSelections).map(([category,value])=>{const preset=appearanceLibrary[category]?.presets.find(item=>item.name===value)||(category==="Materials"?materialReferences.find(item=>item.name===value):undefined);return preset?`${appearanceTarget.toLowerCase()}: ${preset.prompt}`:`${category.toLowerCase()}: ${value}`;}).join(", ");if(!text){setError("Choose a material, hair, fabric or landscape first.");return;}setPrompt(previous=>[previous.trim(),text].filter(Boolean).join(", "));setTrainingStudioOpen(false);}}>Add to my prompt</button>:<button className="appearance-apply" onClick={()=>setTrainingState(`Appearance Library applied to all ${trainingShots.length*trainingEnvironments.length*trainingImagesPerSetup} planned images.`)}>Apply appearance to all 8</button>}
               <footer>{Object.entries(appearanceSelections).map(([category,value])=><span key={category}>{category}: {value}</span>)}</footer>
-            </aside>            {promptCardsOpen&&<aside className="prompt-cards-studio">
+            </aside>}            {promptCardsOpen&&<aside className="prompt-cards-studio">
               <header><div><h3>Prompt Cards & Wildcards Studio</h3><p>Build controlled combinations manually or create a randomized variation.</p></div><button onClick={()=>setPromptCardsOpen(false)}>×</button></header>
               <div className="prompt-card-actions"><button onClick={randomizePromptCards}>✦ Randomize Combination</button><button onClick={()=>setPromptCardSelections({})}>Clear Cards</button></div>
               <div className="prompt-card-groups">{Object.entries(promptCardLibrary).map(([category,group])=><section key={category}><h4>{group.label}</h4><div>{group.options.map(card=><button key={card.name} className={promptCardSelections[category]===card.name?"selected":""} onClick={()=>setPromptCardSelections(items=>{const next={...items};if(next[category]===card.name)delete next[category];else next[category]=card.name;return next;})}><b>{card.name}</b><small>{card.prompt}</small></button>)}</div></section>)}</div>

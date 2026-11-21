@@ -6,9 +6,17 @@ import { requestTextMask } from "./mask-by-words";
 import { GLOBE_CENTER, GLOBE_RADIUS, OrbitScene, projectOrbit, wrapAzimuth } from "./orbit-sphere";
 import { generateSpin, generateView, SpinViewer, type CameraPosition, type SpinFrame } from "./spin-360";
 import { CAMERA_ELEVATIONS, dragCamera, snapCamera } from "./studio-4d-camera";
+import {
+  AnimateControls, AnimationPreview, requestAnimation, stopAnimationJob,
+  type AnimateRequest, type AnimateResult,
+} from "./studio-4d-animate";
+import {
+  WardrobeControls, loadWardrobe, requestWardrobe, saveWardrobeLook, stopWardrobeJob,
+  type WardrobeRequest, type WardrobeResult,
+} from "./studio-4d-wardrobe";
 import "./studio-4d.css";
 
-const SECTIONS = ["Camera", "Clothes", "Person", "Background", "360°"] as const;
+const SECTIONS = ["Camera", "Clothes", "Wardrobe", "Person", "Background", "360°", "Animate"] as const;
 const AZIMUTHS = ["Front", "Front right", "Right side", "Rear right", "Back", "Rear left", "Left side", "Front left"];
 const CAMERA_ANGLES = ["Front", "Front-right", "Right side", "Back-right", "Back", "Back-left", "Left side", "Front-left"];
 const HEIGHTS = { low: -32, eye: 0, high: 32 };
@@ -22,7 +30,16 @@ const DEFAULT_CAMERA: CameraPosition = { azimuth: 0, elevation: "eye", distance:
 type Section = typeof SECTIONS[number];
 type View = { id: string; camera: CameraPosition; image: string };
 type Master = { name: string; image: string; views: View[]; spin: SpinFrame[] };
-type StudioRun = { controller: AbortController; job?: ImageJob; stopping?: boolean; ending?: boolean; message?: string };
+type StudioRun = {
+  controller: AbortController;
+  job?: ImageJob;
+  wardrobeJob?: string;
+  animationJob?: string;
+  animation?: boolean;
+  stopping?: boolean;
+  ending?: boolean;
+  message?: string;
+};
 type ImageTask = (signal: AbortSignal, queued: (job: ImageJob) => void) => Promise<string>;
 
 const angleName = (angle: number) => AZIMUTHS[angle / 45];
@@ -182,15 +199,22 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
   const [stopping, setStopping] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [animation, setAnimation] = useState<{ image: string; result: AnimateResult }>();
+  const [wardrobeResult, setWardrobeResult] = useState<WardrobeResult>();
+  const [looks, setLooks] = useState(loadWardrobe);
 
   const busy = Boolean(progress) || loading;
   const master = history[version];
+  const animationResult = section === "Animate" && animation?.image === master?.image ? animation?.result : undefined;
   const previous = history[version - 1];
+  const wardrobePreview = section === "Wardrobe" ? wardrobeResult : undefined;
   const selectedView = master?.views.find((view) => view.id === viewId);
   const spinFrame = section === "360°" ? master?.spin.find(({ angle }) => angle === spinCurrent && angle !== 0) : undefined;
-  const image = before ? previous?.image : selectedView?.image ?? spinFrame?.image ?? master?.image;
-  const imageLabel = before ? "Before last edit" : selectedView ? cameraLabel(selectedView.camera)
-    : spinFrame ? `${angleName(spinFrame.angle)} · 360° spin` : "Master";
+  const image = wardrobePreview ? (before ? master?.image : wardrobePreview.image)
+    : before ? previous?.image : selectedView?.image ?? spinFrame?.image ?? master?.image;
+  const imageLabel = wardrobePreview ? (before ? "Master before try-on" : "Wardrobe try-on")
+    : before ? "Before last edit" : selectedView ? cameraLabel(selectedView.camera)
+      : spinFrame ? `${angleName(spinFrame.angle)} · 360° spin` : "Master";
   const maskPreview = section === "Clothes" && !before && !selectedView ? clothesMask : "";
 
   useEffect(() => {
@@ -205,17 +229,18 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
     setSpinCurrent(0);
     setBefore(false);
     setClothesMask("");
+    setWardrobeResult(undefined);
     setError("");
     setNotice("");
   }
 
-  async function loadPicture(file: File, useImage: (image: string) => void) {
+  async function loadPicture(file: File, acceptImage: (image: string) => void) {
     if (run.current || uploading.current) return;
     uploading.current = true;
     setLoading(true);
     setError("");
     try {
-      useImage(await openPicture(file));
+      acceptImage(await openPicture(file));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Could not open this picture.");
     } finally {
@@ -233,24 +258,26 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
   async function finishStop(active: StudioRun) {
     if (active.stopping) return;
     active.stopping = true;
-    setProgress("Stopping image job…");
+    setProgress(active.animation ? "Stopping animation…" : "Stopping image job…");
     setStopping(true);
     try {
       if (active.job) await stopImageJob(active.job);
+      if (active.wardrobeJob) await stopWardrobeJob(active.wardrobeJob);
+      if (active.animationJob) await stopAnimationJob(active.animationJob);
       setError(active.message ?? "");
       if (!active.message) setNotice("Job stopped.");
       finishRun();
     } catch {
       setError("Froja could not confirm the job stopped. Press Stop to check again.");
-      setProgress("Waiting for the image engine…");
+      setProgress(active.animation ? "Waiting for the animation to stop…" : "Waiting for the image engine…");
       setStopping(false);
       active.stopping = false;
     }
   }
 
-  async function start(label: string, work: (active: StudioRun) => Promise<void>) {
+  async function start(label: string, work: (active: StudioRun) => Promise<void>, animation = false) {
     if (run.current || uploading.current) return;
-    const active: StudioRun = { controller: new AbortController() };
+    const active: StudioRun = { controller: new AbortController(), animation };
     run.current = active;
     setError("");
     setNotice("");
@@ -261,11 +288,11 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
     } catch (failure) {
       active.ending = true;
       if (!active.controller.signal.aborted) {
-        active.message = failure instanceof DOMException && failure.name === "TimeoutError" ? "The image job took too long. Try again."
+        active.message = failure instanceof DOMException && failure.name === "TimeoutError" ? "The job took too long. Try again."
           : failure instanceof Error && !(failure instanceof TypeError || failure instanceof SyntaxError) ? failure.message
-          : "Could not get a result from the image engine. Check that Froja is running and try again.";
+          : "Could not get a result from Froja. Check that it is running and try again.";
       }
-      if (active.job || active.controller.signal.aborted) {
+      if (active.job || active.wardrobeJob || active.animationJob || active.controller.signal.aborted) {
         await finishStop(active);
       } else {
         setError(active.message ?? "");
@@ -278,7 +305,7 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
     const active = run.current;
     if (!active) return;
     setStopping(true);
-    setProgress("Stopping image job…");
+    setProgress(active.animation ? "Stopping animation…" : "Stopping image job…");
     if (active.ending) void finishStop(active);
     else active.controller.abort();
   }
@@ -349,6 +376,22 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
     });
   }
 
+  function tryWardrobe(request: WardrobeRequest) {
+    if (!master) return;
+    void start("Starting Wardrobe…", async (active) => {
+      const signal = AbortSignal.any([active.controller.signal, AbortSignal.timeout(20 * 60_000)]);
+      const result = await requestWardrobe(master.image, request, signal,
+        (id) => { active.wardrobeJob = id; }, setProgress);
+      signal.throwIfAborted();
+      setWardrobeResult(result);
+      setBefore(false);
+      setNotice("Try-on ready.");
+      void saveWardrobeLook(result.reference_crop_url, request).then(setLooks).catch(() => {
+        setNotice("The browser could not save the reference to My wardrobe.");
+      });
+    });
+  }
+
   function changePerson() {
     if (!master || !face) return;
     void start("Swapping the face…", async (active) => {
@@ -387,6 +430,25 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
     });
   }
 
+  function makeAnimation(request: AnimateRequest) {
+    if (!master) return;
+    void start("Starting animation…", async (active) => {
+      const result = await requestAnimation(master.image, request, active.controller.signal,
+        (id) => { active.animationJob = id; }, setProgress);
+      setAnimation({ image: master.image, result });
+      setNotice("Animation ready.");
+    }, true);
+  }
+
+  function animationViews() {
+    if (!master) return [];
+    const views = new Map<number, string>();
+    for (const view of master.views) views.set(view.camera.azimuth, view.image);
+    for (const frame of master.spin) views.set(frame.angle, frame.image);
+    views.set(0, master.image);
+    return Array.from(views, ([azimuth, image]) => ({ azimuth, image })).sort((a, b) => a.azimuth - b.azimuth);
+  }
+
   async function downloadAll() {
     if (!master) return;
     setError("");
@@ -403,7 +465,8 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
 
   function downloadCurrent() {
     if (!image) return;
-    const name = before ? `master-${version - 1}` : selectedView ? `camera-${angleFile(selectedView.camera.azimuth)}`
+    const name = wardrobePreview ? (before ? `master-${version}` : "wardrobe-try-on")
+      : before ? `master-${version - 1}` : selectedView ? `camera-${angleFile(selectedView.camera.azimuth)}`
       : spinFrame ? `spin-${angleFile(spinFrame.angle)}` : `master-${version}`;
     const extension = imageExtension(/^data:([^;]+);/.exec(image)?.[1] ?? null);
     downloadImageFile(image, `froja-${name}.${extension}`);
@@ -429,17 +492,18 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
     <div className="studio-4d-layout">
       <section className="studio-4d-card studio-4d-main" aria-label="Current view and master history">
         <div className="studio-4d-preview-bar">
-          <strong>{image ? imageLabel : "Current view"}</strong>
-          {previous && <div className="studio-4d-pills" role="group" aria-label="Compare the last edit">
+          <strong>{animationResult ? "Animation preview" : image ? imageLabel : "Current view"}</strong>
+          {(wardrobePreview || previous) && !animationResult && <div className="studio-4d-pills" role="group"
+            aria-label={wardrobePreview ? "Compare the try-on" : "Compare the last edit"}>
             <button type="button" aria-pressed={before} onClick={() => setBefore(true)}>Before</button>
             <button type="button" aria-pressed={!before} onClick={() => setBefore(false)}>After</button>
           </div>}
         </div>
-        <div className="studio-4d-preview mask-words-source">
+        {animationResult ? <AnimationPreview result={animationResult} /> : <div className="studio-4d-preview mask-words-source">
           {image ? <img src={image} alt={imageLabel} draggable={false} /> : <p>Choose a picture of one person to start.</p>}
           {maskPreview && <span className="mask-words-overlay" role="img" aria-label="Clothes selected in blue"
             style={{ "--inpaint-mask": `url("${maskPreview}")` } as CSSProperties} />}
-        </div>
+        </div>}
         {master && <div className="studio-4d-history">
           <div className="studio-4d-preview-bar">
             <strong>Master history</strong>
@@ -495,6 +559,19 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
           </form>
         </>}
 
+        <div hidden={section !== "Wardrobe"}>
+          <WardrobeControls hasMaster={Boolean(master)} busy={busy} result={wardrobeResult} looks={looks}
+            pickPicture={(acceptImage) => <PicturePicker label="Upload a look" disabled={busy || Boolean(wardrobeResult)}
+              onFile={(file) => { void loadPicture(file, acceptImage); }} />}
+            onTry={tryWardrobe} onKeep={() => {
+              if (wardrobeResult && !busy) applyEdit("Wardrobe", wardrobeResult.image);
+            }} onDiscard={() => {
+              setWardrobeResult(undefined);
+              setBefore(false);
+              setNotice("");
+            }} />
+        </div>
+
         {section === "Person" && <div className="studio-4d-form">
           <PicturePicker label="Upload a face photo" disabled={busy || !master} onFile={(file) => { void loadPicture(file, setFace); }} />
           {face && <img className="studio-4d-face" src={face} alt="Face to use" />}
@@ -515,6 +592,9 @@ export default function Studio4D({ open, onClose }: { open: boolean; onClose: ()
               setCurrent={setSpinCurrent} sourceLabel="Master" open={open} key={version} />
           </div>}
         </div>}
+
+        {section === "Animate" && <AnimateControls hasMaster={Boolean(master)} busy={busy} onAnimate={makeAnimation}
+          views={animationViews()} onMakeViews={() => setSection("360°")} />}
       </section>
     </div>
 

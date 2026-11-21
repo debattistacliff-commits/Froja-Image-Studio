@@ -1,0 +1,83 @@
+.studio-4d-animate { display: grid; gap: 12px; }
+
+.studio-4d-pills.studio-4d-sections { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.studio-4d-animate-card {
+  padding: 14px;
+  border: 1px solid #383a3e;
+  border-radius: 17px;
+  background: #18191b;
+}
+
+.studio-4d-animate-card h3 { margin: 0 0 2px; font-size: 16px; }
+
+.studio-4d-animate-real {
+  border-color: color-mix(in srgb, var(--studio-accent) 45%, #383a3e);
+}
+
+.studio-4d-animate-card textarea,
+.studio-4d-animate-real select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #505359;
+  border-radius: 11px;
+  background: #141517;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+}
+
+.studio-4d-animate-card textarea { resize: vertical; }
+.studio-4d-animate-real select { width: fit-content; }
+
+#studio-4d label.studio-4d-animate-protect {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.studio-4d-animate-protect input {
+  accent-color: var(--studio-accent);
+  cursor: inherit;
+}
+
+.studio-4d-animate-protect input:disabled { opacity: .55; cursor: default; }
+.studio-4d-animate-warning { color: #ffb6aa; }
+
+.studio-4d-animation-preview > video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  border-radius: inherit;
+  object-fit: contain;
+}
+
+.studio-4d-animation-downloads a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 13px;
+  border: 1px solid #45474d;
+  border-radius: 999px;
+  background: #292b2e;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.studio-4d-animation-downloads a:hover { background: #383b40; }
+
+@media (max-width: 790px) {
+  #studio-4d {
+    position: fixed;
+    inset-inline: 12px auto;
+    width: calc(100dvw - 24px);
+    margin-inline: 0;
+  }
+}

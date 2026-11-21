@@ -1,0 +1,29 @@
+.studio-4d-wardrobe { display: grid; gap: 16px; min-width: 0; }
+.wardrobe-categories { gap: 5px; }
+.wardrobe-categories button { padding-inline: 9px; }
+
+.wardrobe-upload {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 132px;
+  overflow: hidden;
+  border: 1px dashed #505359;
+  border-radius: 14px;
+  background: #141517;
+}
+
+.wardrobe-upload > img { width: 100%; height: 144px; object-fit: contain; }
+.wardrobe-upload .studio-4d-picker { margin: 8px; }
+.wardrobe-upload:has(> img) .studio-4d-picker { position: absolute; inset: auto 0 0 auto; }
+.wardrobe-upload .studio-4d-picker:has(input:disabled) { opacity: .7; }
+.wardrobe-review > :first-child { flex: 1; }
+.wardrobe-masks { font-size: 13px; }
+.wardrobe-masks summary { cursor: pointer; }
+.wardrobe-masks > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.wardrobe-masks figure { margin: 0; text-align: center; }
+.wardrobe-masks img { width: 100%; height: 95px; object-fit: contain; border-radius: 7px; background: #111214; }
+.wardrobe-masks figcaption { color: #b8bdc5; }
+.wardrobe-saved { display: grid; gap: 6px; min-width: 0; }
+.wardrobe-saved strong { font-size: 14px; }
+.wardrobe-saved .studio-4d-thumbs img { object-fit: contain; object-position: center; }

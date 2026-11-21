@@ -23,6 +23,15 @@
 A narrated walk-through: write an idea, let Ollama improve it, pick a style and camera, generate, turn a picture into a tested ComfyUI workflow, and relight a portrait in the 3D light room. Everything in the video — pictures, animation, music and voice — was made locally with Froja and open models.
 
 
+## What's new in 0.4 — Animate and Wardrobe (marked TEST in the app)
+
+- **Animate** (new tab in 4D Studio) with three ways to bring a picture to life:
+  - **Real motion (MiniMax H3)** — the person really moves (smiles, turns the head, waves) and the background moves too, with sound. Froja then sharpens the video 2× with RealESRGAN and evens out the sound level. On a 12 GB card a 3-second clip takes about 10 minutes. Needs the optional MiniMax H3 video (see below).
+  - **Bring to life (fast · background only)** — LTX Video animates the background while the person is protected and stays still; about 3 minutes.
+  - **Camera move** — Orbit, Push-in, Crane or Bullet-time around the person, plus a camera script you can open in Blender.
+- **Wardrobe — virtual try-on** (new tab in 4D Studio). Upload a picture of a look you like and put it on your person: Top, Bottom, Outfit, Shoes, Hair, Accessory or Material. Froja cuts out only the item (never the other person's face), finds the area to replace, draws the new item with Qwen-Image-Edit-2509 and pastes it back only inside that area — the face stays exactly the same, pixel for pixel. Jackets, suits, coats and hoodies get long sleeves while the hands are kept. *Keep this* adds a new master version, so the look follows the person into Camera, 360° and Animate. A *My wardrobe* strip remembers looks you used. Use only photos you have permission to use; the fit and folds are drawn by AI.
+- **Materials & Appearance opens on its own.** It used to open the whole Training Studio; now the Materials card shows only the appearance library, with an **Add to my prompt** button.
+
 ## What's new in 0.3 — the person tools (marked TEST in the app)
 
 - **4D Studio** — one editor around one person. A *master* picture keeps a history (undo/redo); every change follows the person to every angle:
@@ -81,9 +90,8 @@ Camera views use Qwen-Image-Edit-2509 with the *Multiple-angles* and *Lightning*
 
 Froja keeps growing. Coming in the next updates:
 
-- **Animate** — bring the person and the background to life (waves, wind, breathing, a turn of the head) and move the camera with presets such as orbit, push-in, crane and bullet-time, using local video models.
 - **Capture Studio** — a virtual capture booth: cameras all around the person, a glowing dot (point-cloud) view, and **Send to Blender** for 3D scenes and renders.
-- **Polish of the TEST tools** — 4D Studio, 360° Spin and Mask by words get faster and more consistent with every release.
+- **Polish of the TEST tools** — 4D Studio, 360° Spin, Mask by words, Animate and Wardrobe get faster and more consistent with every release (for example sharper jeans and shoe try-ons, and longer real-motion clips).
 - **Your ideas** — open an [issue](../../issues) or start a discussion; suggestions shape what comes next.
 
 Follow or ⭐ the repository to be notified of new releases.
