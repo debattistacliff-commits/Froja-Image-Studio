@@ -18,9 +18,12 @@ import urllib.parse
 import urllib.request
 import uuid
 import zipfile
+from functools import wraps
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+
+import animate
 
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
@@ -357,7 +360,7 @@ def minimax_gpu_tier(vram_gb) -> dict:
     if vram_gb >= 15.5:
         return {"tier": "good", "label": f"Works well on your {vram_gb:.0f} GB card", "max_seconds": 4, "supported": True}
     if vram_gb >= 11.5:
-        return {"tier": "safe", "label": f"Safe mode on your {vram_gb:.0f} GB card: small and slow (about 7 minutes for 3 seconds)", "max_seconds": 3, "supported": True}
+        return {"tier": "safe", "label": f"On your {vram_gb:.0f} GB card: about 10 minutes for 3 seconds at a small size", "max_seconds": 3, "supported": True}
     return {"tier": "none", "label": f"Not supported on a {vram_gb:.0f} GB card (12 GB or more needed)", "max_seconds": 0, "supported": False}
 
 
@@ -390,18 +393,22 @@ def minimax_ready() -> bool:
         return False
 
 
-def start_minimax_engine() -> bool:
+def start_minimax_engine(job_id: str, cancel: threading.Event) -> bool:
     global minimax_video_process
     if minimax_ready():
         return True
     if not COMFY_PYTHON.exists():
         return False
     LOGS.mkdir(exist_ok=True)
+    work = OUTPUTS / "minimax-video" / "engine" / job_id
+    (work / "user").mkdir(parents=True, exist_ok=True)
     stdout = open(LOGS / "minimax-video.log", "a", encoding="utf-8")
     stderr = open(LOGS / "minimax-video-error.log", "a", encoding="utf-8")
     args = [str(COMFY_PYTHON), str(COMFY_ROOT / "main.py"), "--listen", "127.0.0.1", "--port", url_port(MINIMAX_VIDEO_URL, 9020),
             "--disable-all-custom-nodes", "--whitelist-custom-nodes", "ComfyUI-GGUF", "ComfyUI-MiniMax-H3-Turbo",
-            "--preview-method", "none"]
+            "--offline", "--preview-method", "none", "--input-directory", str(work / "input"),
+            "--output-directory", str(work / "output"), "--temp-directory", str(work),
+            "--user-directory", str(work / "user")]
     if EXTRA_PATHS.exists():
         args += ["--extra-model-paths-config", str(EXTRA_PATHS)]
     minimax_video_process = subprocess.Popen(args, cwd=COMFY_ROOT, stdout=stdout, stderr=stderr,
@@ -411,7 +418,8 @@ def start_minimax_engine() -> bool:
             return True
         if minimax_video_process.poll() is not None:
             return False
-        time.sleep(2)
+        if cancel.wait(2):
+            return False
     return False
 
 
@@ -432,7 +440,12 @@ def minimax_status() -> dict:
     missing = minimax_missing_files()
     return {"enabled": minimax_video_enabled(), "installed": not missing, "missing": missing,
             "running": minimax_ready(), "gpu": gpus[0]["name"] if gpus else None, **minimax_gpu_tier(vram),
-            "busy": any(job["status"] == "running" for job in minimax_jobs.values())}
+            "busy": minimax_busy()}
+
+
+def minimax_busy() -> bool:
+    with minimax_lock:
+        return any(not job["_done"].is_set() for job in minimax_jobs.values())
 
 
 def minimax_workflow(prompt: str, width: int, height: int, frames: int, image_name, seed: int, prefix: str) -> dict:
@@ -466,21 +479,46 @@ def _minimax_save_source(data_url: str, job_id: str, width: int, height: int) ->
         raise ValueError("Choose a starting picture (PNG, JPEG or WebP).")
     with Image.open(io.BytesIO(base64.b64decode(match.group(1)))) as opened:
         picture = ImageOps.fit(ImageOps.exif_transpose(opened).convert("RGB"), (width, height), Image.Resampling.LANCZOS)
-    name = f"froja_minimax_{job_id}.png"
-    (COMFY_ROOT / "input").mkdir(parents=True, exist_ok=True)
-    picture.save(COMFY_ROOT / "input" / name)
-    return name
+    data = io.BytesIO()
+    picture.save(data, format="PNG")
+    return upload_camera_view_image(data.getvalue(), f"froja_minimax_{job_id}.png", engine_url=MINIMAX_VIDEO_URL,
+                                    folder="FrojaMiniMax")
 
 
 def _minimax_run(job_id: str, payload: dict) -> None:
     job = minimax_jobs[job_id]
     try:
+        with animate.gpu_slot(reserve=True):
+            try:
+                if engine_has_queued_work(comfy_request) or engine_has_queued_work(extension_comfy_request):
+                    raise RuntimeError("The image engine is busy. Try again when it finishes.")
+                _minimax_generate(job_id, payload, job)
+            finally:
+                if job["_cancel"].is_set() and job.get("prompt_id"):
+                    try:
+                        minimax_request("/interrupt", {}, timeout=5)
+                    except OSError:
+                        pass
+                stop_minimax_engine()  # give the memory back to the picture engines
+    except Exception as exc:
+        with minimax_lock:
+            if job["status"] == "running":
+                job.update(status="failed", phase="Failed", error=str(exc))
+    finally:
+        job["_done"].set()
+
+
+def _minimax_generate(job_id: str, payload: dict, job: dict) -> None:
+    cancel = job["_cancel"]
+    if not cancel.is_set():
         job.update(phase="Freeing memory from the picture engines", progress=0.02)
         release_engine_memory("main", "extension", "joyai", "sensenova", "ollama")
+        if cancel.is_set():
+            return
         job.update(phase="Starting the video engine", progress=0.05)
-        if not start_minimax_engine():
+        if not start_minimax_engine(job_id, cancel) and not cancel.is_set():
             raise RuntimeError("The MiniMax video engine could not start. See logs/minimax-video-error.log.")
-        if job["status"] == "cancelled":
+        if cancel.is_set():
             return
         status = minimax_status()
         sizes = MINIMAX_SIZES.get(status["tier"], MINIMAX_SIZES["safe"])
@@ -502,16 +540,15 @@ def _minimax_run(job_id: str, payload: dict) -> None:
         if payload.get("audio"):
             prompt += f" Sound: {str(payload['audio']).strip()}"
         wf = minimax_workflow(prompt, width, height, frames, image_name, random.randint(1, 2**31), f"video/Froja_MiniMax_{job_id}")
+        if cancel.is_set():
+            return
         result = minimax_request("/prompt", {"prompt": wf, "client_id": "froja-minimax"}, timeout=60)
         if "prompt_id" not in result:
             raise RuntimeError(f"The video recipe was rejected: {str(result)[:300]}")
         job.update(prompt_id=result["prompt_id"], phase="Generating video and sound", width=width, height=height, frames=frames)
         expected = 150 + frames * (5.0 if status["tier"] == "safe" else 2.5)
         start = time.time()
-        while True:
-            time.sleep(3)
-            if job["status"] == "cancelled":
-                return
+        while not cancel.wait(3):
             history = minimax_request(f"/history/{result['prompt_id']}", timeout=10).get(result["prompt_id"])
             if not history:
                 job["progress"] = min(0.95, 0.08 + (time.time() - start) / expected * 0.87)
@@ -523,21 +560,21 @@ def _minimax_run(job_id: str, payload: dict) -> None:
             for node in history.get("outputs", {}).values():
                 for key in ("images", "videos", "gifs"):
                     for item in node.get(key, []):
-                        source = COMFY_ROOT / "output" / item.get("subfolder", "") / item["filename"]
-                        if source.suffix.lower() in {".mp4", ".webm", ".mov"} and source.exists():
+                        suffix = Path(item["filename"]).suffix.lower()
+                        if suffix in {".mp4", ".webm", ".mov"}:
                             target_dir = OUTPUTS / "minimax-video"
                             target_dir.mkdir(parents=True, exist_ok=True)
-                            target = target_dir / f"{job_id}{source.suffix.lower()}"
-                            shutil.copyfile(source, target)
-                            job.update(status="complete", phase="Complete", progress=1.0, file=str(target),
-                                       video_url=f"/api/minimax-video/files/{job_id}", seconds_taken=round(time.time() - job["started"]))
+                            target = target_dir / f"{job_id}{suffix}"
+                            query = urllib.parse.urlencode(item)
+                            with urllib.request.urlopen(f"{MINIMAX_VIDEO_URL}/view?{query}", timeout=60) as response:
+                                with target.open("wb") as output:
+                                    shutil.copyfileobj(response, output)
+                            with minimax_lock:
+                                if not cancel.is_set():
+                                    job.update(status="complete", phase="Complete", progress=1.0, file=str(target),
+                                               video_url=f"/api/minimax-video/files/{job_id}", seconds_taken=round(time.time() - job["started"]))
                             return
             raise RuntimeError("The engine finished but no video file was found.")
-    except Exception as exc:
-        job.update(status="failed", phase="Failed", error=str(exc))
-    finally:
-        if not any(j["status"] == "running" for k, j in minimax_jobs.items() if k != job_id):
-            stop_minimax_engine()  # give the memory back to the picture engines
 
 
 def start_minimax_job(payload: dict) -> dict:
@@ -551,23 +588,23 @@ def start_minimax_job(payload: dict) -> dict:
     if not str(payload.get("prompt", "")).strip():
         raise ValueError("Describe the video you want to create.")
     with minimax_lock:
-        if status["busy"]:
+        if any(not job["_done"].is_set() for job in minimax_jobs.values()):
             raise RuntimeError("A MiniMax video is already being made. Only one at a time keeps your computer safe.")
         job_id = "mm-" + uuid.uuid4().hex[:12]
-        minimax_jobs[job_id] = {"status": "running", "phase": "Queued", "progress": 0.0, "started": time.time()}
+        minimax_jobs[job_id] = {"status": "running", "phase": "Queued", "progress": 0.0, "started": time.time(),
+                                "_done": threading.Event(), "_cancel": threading.Event()}
     threading.Thread(target=_minimax_run, args=(job_id, payload), daemon=True).start()
     return {"job_id": job_id}
 
 
 def cancel_minimax_job(job_id: str) -> dict:
-    job = minimax_jobs.get(job_id)
-    if not job:
-        return {"error": "Unknown job"}
-    job.update(status="cancelled", phase="Cancelled")
-    try:
-        minimax_request("/interrupt", {}, timeout=5)
-    except Exception:
-        pass
+    with minimax_lock:
+        job = minimax_jobs.get(job_id)
+        if not job:
+            return {"error": "Unknown job"}
+        if job["status"] == "running":
+            job.update(status="cancelled", phase="Cancelled")
+            job["_cancel"].set()
     return {"ok": True}
 
 
@@ -685,6 +722,17 @@ def json_response(handler: SimpleHTTPRequestHandler, data, status=200):
     handler.wfile.write(body)
 
 
+def guard_animate_gpu(request):
+    @wraps(request)
+    def guarded(path, *args, **kwargs):
+        if path in ("/prompt", "/free", "/interrupt"):
+            with animate.gpu_slot():
+                return request(path, *args, **kwargs)
+        return request(path, *args, **kwargs)
+    return guarded
+
+
+@guard_animate_gpu
 def comfy_request(path: str, data: dict | None = None, timeout=10):
     encoded = None if data is None else json.dumps(data).encode("utf-8")
     request = urllib.request.Request(
@@ -710,6 +758,7 @@ def comfy_request(path: str, data: dict | None = None, timeout=10):
         summary = "; ".join(messages) or details.get("error", {}).get("message") or raw.strip() or str(exc)
         raise RuntimeError(f"ComfyUI rejected the workflow: {summary}") from exc
 
+@guard_animate_gpu
 def extension_comfy_request(path: str, data: dict | None = None, timeout=15):
     encoded = None if data is None else json.dumps(data).encode("utf-8")
     request = urllib.request.Request(
@@ -1320,10 +1369,7 @@ def build_camera_view_workflow(payload: dict, image_name: str, guide_name: str |
     )):
         raise ValueError("Choose a supported camera instruction.")
     seed = payload.get("seed", -1)
-    if type(seed) is not int or not -1 <= seed < 2**64:
-        raise ValueError("Use a whole-number seed from 0 to 2⁶⁴ − 1, or −1 for a random seed.")
-    if seed == -1:
-        seed = random.randrange(2**32)
+    seed = qwen_edit_seed(seed)
 
     if positioned:
         prompt = camera_position_prompt(payload.get("azimuth"), payload.get("elevation", "eye"),
@@ -1346,6 +1392,17 @@ def build_camera_view_workflow(payload: dict, image_name: str, guide_name: str |
         if guide_name:
             prompt += CAMERA_GUIDE_PROMPT
 
+    return build_qwen_edit_workflow(prompt, seed, image_name, guide_name,
+                                   camera_angles=True, prefix="Froja/Spin360/view")
+
+
+def qwen_edit_seed(seed: int) -> int:
+    if type(seed) is not int or not -1 <= seed < 2**64:
+        raise ValueError("Use a whole-number seed from 0 to 2⁶⁴ − 1, or −1 for a random seed.")
+    return random.randrange(2**32) if seed == -1 else seed
+
+
+def build_qwen_edit_workflow(prompt, seed, image_name, second_image_name, *, camera_angles, prefix):
     workflow = {
         "1": {"class_type": "LoadImage", "inputs": {"image": image_name}},
         "2": {"class_type": "ImageScaleToTotalPixels", "inputs": {
@@ -1354,11 +1411,14 @@ def build_camera_view_workflow(payload: dict, image_name: str, guide_name: str |
         "3": {"class_type": "UNETLoader", "inputs": {
             "unet_name": "qwen_image_edit_2509_fp8_e4m3fn.safetensors", "weight_dtype": "default",
         }},
-        "4": {"class_type": "LoraLoaderModelOnly", "inputs": {
+    }
+    if camera_angles:
+        workflow["4"] = {"class_type": "LoraLoaderModelOnly", "inputs": {
             "model": ["3", 0], "lora_name": "Qwen-Edit-2509-Multiple-angles.safetensors", "strength_model": 0.8,
-        }},
+        }}
+    workflow.update({
         "5": {"class_type": "LoraLoaderModelOnly", "inputs": {
-            "model": ["4", 0], "lora_name": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+            "model": ["4" if camera_angles else "3", 0], "lora_name": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
             "strength_model": 1.0,
         }},
         "6": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["5", 0], "shift": 3.1}},
@@ -1383,25 +1443,25 @@ def build_camera_view_workflow(payload: dict, image_name: str, guide_name: str |
             "image": ["14", 0], "upscale_method": "lanczos", "crop": "disabled",
             "width": ["16", 0], "height": ["16", 1],
         }},
-        "15": {"class_type": "SaveImage", "inputs": {"images": ["17", 0], "filename_prefix": "Froja/Spin360/view"}},
-    }
-    if guide_name:
-        workflow["18"] = {"class_type": "LoadImage", "inputs": {"image": guide_name}}
+        "15": {"class_type": "SaveImage", "inputs": {"images": ["17", 0], "filename_prefix": prefix}},
+    })
+    if second_image_name:
+        workflow["18"] = {"class_type": "LoadImage", "inputs": {"image": second_image_name}}
         workflow["10"]["inputs"]["image2"] = ["18", 0]
     return workflow
 
 
-def upload_camera_view_image(raw: bytes, filename: str) -> str:
+def upload_camera_view_image(raw: bytes, filename: str, *, engine_url=None, folder="FrojaSpin") -> str:
     boundary = uuid.uuid4().hex
     header = (
         f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="subfolder"\r\n\r\nFrojaSpin\r\n'
+        f'Content-Disposition: form-data; name="subfolder"\r\n\r\n{folder}\r\n'
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="image"; filename="{filename}"\r\n'
         "Content-Type: application/octet-stream\r\n\r\n"
     )
     request = urllib.request.Request(
-        COMFY_URL + "/upload/image",
+        (engine_url or COMFY_URL) + "/upload/image",
         data=header.encode("ascii") + raw + f"\r\n--{boundary}--\r\n".encode("ascii"),
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
     )
@@ -1448,6 +1508,530 @@ def build_mask_from_text_workflow(payload: dict, image_name: str) -> dict:
     workflow["5"] = {"class_type": "MaskToImage", "inputs": {"mask": mask_ref}}
     workflow["6"] = {"class_type": "SaveImage", "inputs": {"images": ["5", 0], "filename_prefix": "Froja/maskwords"}}
     return workflow
+
+
+WARDROBE_CATEGORIES = {
+    "top": ("the jacket", "the shirt"),
+    "bottom": ("the jeans", "the trousers"),
+    "outfit": ("the clothes", "the clothes"),
+    "shoes": ("the shoes", "the shoes"),
+    "hair": ("the hairstyle", "the hair"),
+    "accessory": ("the accessory", ""),
+    "material": ("the fabric", ""),
+}
+WARDROBE_PROMPTS = {
+    "top": ("Dress the person in image 1 in {item} shown in image 2, replacing {target}."
+            " Keep the trousers and hair. Layer jackets over the original top and retain the original waistband."),
+    "bottom": ("Dress the person in image 1 in {item} shown in image 2, replacing {target}."
+               " Keep the top, hair and shoes. Match the original waistband position and the visible leg outlines."),
+    "outfit": "Dress the person in image 1 in the outfit shown in image 2 ({item}), replacing {target}. Keep the hair.",
+    "shoes": "Put {item} from image 2 on the feet of the person in image 1, replacing {target}. Keep the clothes and hair.",
+    "hair": "Give the person in image 1 the hairstyle shown in image 2 ({item}), replacing {target}. Keep the clothes.",
+    "accessory": "Fit {item} from image 2 onto the person in image 1 at {target}. Keep their existing clothes and hairstyle.",
+    "material": "Change the fabric of {target} on the person in image 1 to {item} shown in image 2. Keep the cut, seams and fit.",
+}
+WARDROBE_ASSETS = {
+    "image_url": "result.png",
+    "reference_crop_url": "reference-crop.png",
+    "reference_mask_url": "reference-mask.png",
+    "target_mask_url": "target-mask.png",
+}
+wardrobe_jobs = {}
+wardrobe_lock = threading.Lock()
+
+
+def wardrobe_terms(payload: dict) -> tuple[str, str, str]:
+    category = payload.get("category")
+    if not isinstance(category, str) or category not in WARDROBE_CATEGORIES:
+        raise ValueError("Choose a Wardrobe category.")
+    default_item, default_target = WARDROBE_CATEGORIES[category]
+    item = payload.get("item", "")
+    target = payload.get("target", "")
+    for label, value in (("Item", item), ("Target", target)):
+        if not isinstance(value, str) or len(value) > 200:
+            raise ValueError(f"{label} must be text up to 200 characters.")
+    item = item.strip()
+    long_sleeves = {"jacket", "suit", "blazer", "coat", "hoodie", "sweater", "jumper", "cardigan", "sleeve", "sleeved"}
+    if category == "top" and not target.strip() and long_sleeves & set(re.findall(r"[a-z]+", item.lower())):
+        default_target = "the shirt and the arms"
+    target = target.strip() or default_target
+    if category == "material":
+        target = target or item or "the clothes"
+    if category == "accessory" and not target:
+        accessory_areas = {
+            "scarf": "the neck", "tie": "the shirt", "necklace": "the neck",
+            "hat": "the hair", "cap": "the hair", "belt": "the waist",
+            "watch": "the wrist", "bracelet": "the wrist", "bag": "the shoulder",
+        }
+        target = next((accessory_areas[word] for word in re.findall(r"\w+", item.lower())
+                       if word in accessory_areas), "the upper body")
+    return category, item or default_item, target
+
+
+def wardrobe_target_parts(target: str) -> list[str]:
+    """Mask by words finds one thing per phrase, so "the shirt and the arms" is masked part by part."""
+    parts = [part.strip() for part in re.split(r"\s*(?:,|\band\b)\s*", target) if part.strip()]
+    return parts or [target]
+
+
+def wardrobe_prompt(category: str, item: str, target: str) -> str:
+    return WARDROBE_PROMPTS[category].format(item=item, target=target) + (
+        " Use image 1 for the person and composition. Keep their face, skin tone, body shape, pose, hands,"
+        " framing and background exactly the same. Match the original lighting and shadows."
+        " Follow the reference color and texture, with natural fit and folds."
+    )
+
+
+def build_wardrobe_workflow(payload: dict, person_name: str, reference_name: str, *, cropped_bottom_mask=None) -> dict:
+    category, item, target = wardrobe_terms(payload)
+    prompt = wardrobe_prompt(category, item, target)
+    if cropped_bottom_mask:
+        prompt = (
+            f"Restyle {target} visible in image 1 with the denim wash, fabric details and distressing from {item}"
+            " in image 2. Keep the original waistband and leg outlines at exactly the same scale and position."
+            " Denim fills the same area and continues through the bottom edge of the photo."
+            " Preserve the face, hands, shirt, pose, background and original lighting of image 1."
+        )
+    workflow = build_qwen_edit_workflow(
+        prompt, qwen_edit_seed(payload.get("seed", -1)),
+        person_name, reference_name, camera_angles=False, prefix="Froja/Wardrobe/edit",
+    )
+    if cropped_bottom_mask:
+        workflow["19"] = {"class_type": "LoadImageMask", "inputs": {"image": cropped_bottom_mask, "channel": "red"}}
+        workflow["20"] = {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["12", 0], "mask": ["19", 0]}}
+        workflow["13"]["inputs"].update(latent_image=["20", 0], denoise=0.45)
+    return workflow
+
+
+def validate_wardrobe(payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        raise ValueError("Send a Wardrobe request as a JSON object.")
+    category, item, target = wardrobe_terms(payload)
+    seed = qwen_edit_seed(payload.get("seed", -1))
+    request = {"category": category, "item": item, "target": target, "seed": seed}
+    for field, label in (("person", "Master picture"), ("reference", "Reference picture")):
+        value = payload.get(field)
+        if not isinstance(value, str):
+            raise ValueError(f"Choose a {label.lower()}.")
+        raw, _ = decode_image_upload(value, label)
+        try:
+            with Image.open(io.BytesIO(raw), formats=["PNG", "JPEG", "WEBP"]) as image:
+                if image.width * image.height > 36_000_000:
+                    raise ValueError(f"{label} must be 36 megapixels or smaller.")
+                mode = "RGBA" if "A" in image.getbands() or "transparency" in image.info else "RGB"
+                request[field] = ImageOps.exif_transpose(image).convert(mode)
+        except (OSError, Image.DecompressionBombError) as exc:
+            raise ValueError(f"{label} could not be opened.") from exc
+    return request
+
+
+def wardrobe_reference_crop(reference, mask):
+    bounds = mask.getbbox()
+    if not bounds:
+        raise ValueError("Could not find the reference item. Try describing it more specifically.")
+    x1, y1, x2, y2 = bounds
+    padding = max(8, round(0.07 * max(x2 - x1, y2 - y1)))
+    piece = reference.crop(bounds)
+    matte = mask.crop(bounds)
+    if piece.mode == "RGBA":
+        matte = ImageChops.multiply(matte, piece.getchannel("A"))
+    crop = Image.new("RGB", (piece.width + 2 * padding, piece.height + 2 * padding), "#808080")
+    crop.paste(piece.convert("RGB"), (padding, padding), matte)
+    return crop
+
+
+def wardrobe_reference_query(category, item):
+    # A suit jacket names both a suit and a jacket. Ask for the jacket alone when narrowing the mask.
+    if category == "top" and re.search(r"\bsuit\s+jacket\b", item, re.IGNORECASE):
+        return "jacket"
+    return item
+
+
+def wardrobe_visible_bottom(reference, reference_mask, target_mask):
+    x1, y1, x2, y2 = target_mask.getbbox()
+    if y2 < target_mask.height:
+        return None
+    left, top, right, bottom = reference_mask.getbbox()
+    # If the trousers run through the camera crop, condition on the same visible fraction at matching width.
+    visible_height = round((y2 - y1) * (right - left) / (x2 - x1))
+    if visible_height >= 0.9 * (bottom - top):
+        return None
+    bounds = (0, 0, reference.width, top + max(1, visible_height))
+    return wardrobe_reference_crop(reference.crop(bounds), reference_mask.crop(bounds))
+
+
+def wardrobe_composite(person, edited, target_mask, face_mask):
+    face_guard = face_mask.filter(ImageFilter.MaxFilter(9))
+    target = ImageChops.subtract(target_mask, face_guard)
+    matte = ImageChops.multiply(target, target.filter(ImageFilter.GaussianBlur(4)))
+    if not matte.getbbox():
+        raise ValueError("The replace area is empty after protecting the face. Try a different area.")
+    fitted = edited.convert(person.mode).resize(person.size, Image.Resampling.LANCZOS)
+    result = Image.composite(fitted, person, matte)
+    if person.mode == "RGBA":
+        result.putalpha(person.getchannel("A"))
+    return result, matte
+
+
+class WardrobeJob:
+    def __init__(self):
+        self.id = uuid.uuid4().hex
+        self.folder = OUTPUTS / "wardrobe" / self.id
+        self.cancel = threading.Event()
+        self.status = "running"
+        self.stage = "Preparing Wardrobe…"
+        self.error = None
+
+    def check_stop(self):
+        if self.cancel.is_set():
+            raise animate.Stopped()
+
+    def snapshot(self):
+        with wardrobe_lock:
+            result = {"job_id": self.id, "status": self.status, "stage": self.stage, "error": self.error}
+        if result["status"] == "complete":
+            result.update({key: f"/api/wardrobe/{self.id}/{name}" for key, name in WARDROBE_ASSETS.items()})
+        return result
+
+
+def run_wardrobe(job: WardrobeJob, request: dict):
+    def upload(image, url, name):
+        with io.BytesIO() as data:
+            image.save(data, format="PNG")
+            return upload_camera_view_image(data.getvalue(), f"{job.id}-{name}.png", engine_url=url, folder="FrojaWardrobe")
+
+    def render(requester, url, workflow, label):
+        try:
+            data = animate_comfy_output(job, requester, url, workflow, ".png")
+        except RuntimeError as exc:
+            raise RuntimeError(f"{label}: {str(exc).replace('animation ', '')}") from exc
+        with Image.open(io.BytesIO(data)) as image:
+            return image.copy()
+
+    def mask(image_name, prompt, size, *, grow=0, threshold=0.30):
+        workflow = build_mask_from_text_workflow({"prompt": prompt, "grow": grow, "threshold": threshold}, image_name)
+        return render(extension_comfy_request, EXTENSION_COMFY_URL, workflow, f"Finding {prompt}").convert("L").resize(
+            size, Image.Resampling.NEAREST,
+        )
+
+    status, error = "complete", None
+    try:
+        with animate.gpu_slot(reserve=True):
+            job.check_stop()
+            if any(engine_has_queued_work(engine) for engine in
+                   (comfy_request, extension_comfy_request, joyai_request, sensenova_request)):
+                raise RuntimeError("Another Froja engine is running. Try again when it finishes.")
+            release_engine_memory("main", "joyai", "sensenova", "ollama")
+            try:
+                if not start_extension_comfy():
+                    raise RuntimeError("The Mask by words engine could not start.")
+                if "SAM2Segment" not in extension_comfy_request("/object_info/SAM2Segment"):
+                    raise RuntimeError("Wardrobe needs the ComfyUI-RMBG nodes for Mask by words.")
+                person, reference = request["person"], request["reference"]
+                job.stage = "Isolating the reference item…"
+                ref_name = upload(reference, EXTENSION_COMFY_URL, "reference")
+                item = request["item"]
+                for threshold in (0.38, 0.30, 0.24):
+                    ref_mask = mask(ref_name, item, reference.size, threshold=threshold)
+                    if ref_mask.getbbox():
+                        break
+                narrower = wardrobe_reference_query(request["category"], item)
+                if narrower != item and ref_mask.getbbox():
+                    garment = mask(ref_name, narrower, reference.size, threshold=0.38)
+                    overlap = ImageChops.multiply(ref_mask, garment)
+                    if overlap.getbbox():
+                        ref_mask = overlap
+                ref_face = mask(ref_name, "the face", reference.size, threshold=0.44)
+                if request["category"] == "hair" and not ref_face.getbbox():
+                    ref_face = mask(ref_name, "the face", reference.size)
+                item_pixels = ref_mask.histogram()[255]
+                ref_mask = ImageChops.subtract(ref_mask, ref_face)
+                if ref_mask.histogram()[255] < 0.2 * item_pixels:
+                    raise ValueError("Could not isolate the item from the reference face. Try a closer picture of the item.")
+                crop = wardrobe_reference_crop(reference, ref_mask)
+                job.stage = "Finding the replace area and protecting the face…"
+                person_name = upload(person, EXTENSION_COMFY_URL, "person-mask")
+                target = Image.new("L", person.size, 0)
+                for part in wardrobe_target_parts(request["target"]):
+                    found = mask(person_name, part, person.size, grow=12)
+                    if not found.getbbox():
+                        found = mask(person_name, part, person.size, grow=12, threshold=0.24)
+                    target = ImageChops.lighter(target, found)
+                if not target.getbbox():
+                    raise ValueError("Could not find the replace area on the master. Try describing it more specifically.")
+                if "the arms" in wardrobe_target_parts(request["target"]):
+                    # "hand" (singular) finds both hands; "the hands" tends to return the whole person.
+                    hands = mask(person_name, "hand", person.size, grow=8)
+                    # Only protect the hands when the detector really found hands (not the whole person).
+                    if 0 < sum(hands.histogram()[128:]) < 0.06 * person.size[0] * person.size[1]:
+                        target = ImageChops.subtract(target, hands)
+                face = mask(person_name, "the face", person.size)
+                if not face.getbbox():
+                    raise ValueError("Could not find the face to protect. Use a master picture with a visible face.")
+                visible_crop = wardrobe_visible_bottom(reference, ref_mask, target) if request["category"] == "bottom" else None
+            finally:
+                release_engine_memory("extension")
+
+            job.check_stop()
+            job.stage = "Trying on the look…"
+            try:
+                if not start_comfy():
+                    raise RuntimeError("The main ComfyUI engine could not start.")
+                person_name = upload(person, COMFY_URL, "person-edit")
+                crop_name = upload(visible_crop if visible_crop is not None else crop, COMFY_URL, "reference-crop")
+                mask_name = upload(target, COMFY_URL, "visible-trousers-mask") if visible_crop is not None else None
+                workflow = build_wardrobe_workflow(request, person_name, crop_name, cropped_bottom_mask=mask_name)
+                edited = render(comfy_request, COMFY_URL, workflow, "Trying on the look")
+            finally:
+                release_engine_memory("main")
+
+            job.check_stop()
+            job.stage = "Blending the edit into the master…"
+            result, matte = wardrobe_composite(person, edited, target, face)
+            job.folder.mkdir(parents=True, exist_ok=True)
+            assets = {
+                "image_url": result, "reference_crop_url": crop,
+                "reference_mask_url": ref_mask, "target_mask_url": matte,
+            }
+            for key, image in assets.items():
+                image.save(job.folder / WARDROBE_ASSETS[key], format="PNG")
+    except animate.Stopped:
+        status = "stopped"
+    except Exception as exc:
+        status, error = "failed", str(exc)
+    finally:
+        with wardrobe_lock:
+            job.status = "stopped" if job.cancel.is_set() else status
+            job.stage = ""
+            job.error = error if job.status == "failed" else None
+
+
+def wardrobe_get(handler, path):
+    parts = path.removeprefix("/api/wardrobe/").split("/")
+    with wardrobe_lock:
+        job = wardrobe_jobs.get(parts[0])
+    if job and len(parts) == 1:
+        return json_response(handler, job.snapshot())
+    if job and job.status == "complete" and len(parts) == 2 and parts[1] in WARDROBE_ASSETS.values():
+        asset = job.folder / parts[1]
+        with asset.open("rb") as stream:
+            handler.send_response(200)
+            handler.send_header("Content-Type", "image/png")
+            handler.send_header("Content-Length", str(asset.stat().st_size))
+            handler.end_headers()
+            shutil.copyfileobj(stream, handler.wfile)
+        return
+    return json_response(handler, {"error": "Wardrobe output was not found."}, 404)
+
+
+def animate_comfy_output(job, requester, url, workflow, suffix, *, all_frames=False):
+    job.check_stop()
+    result = requester("/prompt", {"prompt": workflow, "client_id": f"froja-animate-{job.id}"}, timeout=30)
+    prompt_id = result.get("prompt_id")
+    if not prompt_id:
+        raise RuntimeError("ComfyUI did not queue the animation workflow.")
+    expires = time.monotonic() + 15 * 60
+    stopping = False
+    while True:
+        if job.cancel.is_set() or time.monotonic() >= expires:
+            if not stopping:
+                requester(f"/api/jobs/{prompt_id}/cancel", {}, timeout=10)
+                stopping = True
+            queues = requester("/queue", timeout=10)
+            if not any(item[1] == prompt_id for key in ("queue_running", "queue_pending") for item in queues[key]):
+                job.check_stop()
+                raise RuntimeError("The animation workflow timed out.")
+            time.sleep(0.5)
+            continue
+        history = requester(f"/history/{prompt_id}", timeout=15).get(prompt_id)
+        if history is not None:
+            status = history.get("status", {})
+            if status.get("status_str") != "success":
+                errors = [
+                    details.get("exception_message")
+                    for kind, details in status.get("messages", []) if kind == "execution_error"
+                ]
+                raise RuntimeError(next((message for message in errors if message), "The animation workflow failed."))
+            frames = []
+            for output in history.get("outputs", {}).values():
+                for key in ("images", "videos", "gifs"):
+                    for media in output.get(key, []):
+                        if media.get("filename", "").endswith(suffix):
+                            job.check_stop()
+                            query = urllib.parse.urlencode(media)
+                            with urllib.request.urlopen(f"{url}/view?{query}", timeout=60) as response:
+                                data = response.read()
+                            if not all_frames:
+                                return data
+                            frames.append(data)
+            if frames:
+                return frames
+            raise RuntimeError("ComfyUI finished without returning the expected animation output.")
+        job.cancel.wait(0.75)
+
+
+def run_animate_life(job, ffmpeg, source, request):
+    def upload(image, url, name):
+        data = io.BytesIO()
+        image.save(data, format="PNG")
+        return upload_camera_view_image(data.getvalue(), f"{job.id}-{name}.png", engine_url=url, folder="FrojaAnimate")
+
+    with animate.gpu_slot(reserve=True):
+        job.check_stop()
+        if engine_has_queued_work(comfy_request) or engine_has_queued_work(extension_comfy_request):
+            raise RuntimeError("The image engine is busy. Try again when it finishes.")
+        if not comfy_ready():
+            raise RuntimeError("Bring to life needs the main ComfyUI engine to be running.")
+        mask = None
+        if request["protect"]:
+            job.progress = "Finding the protected subject with SAM2…"
+            if not extension_comfy_ready() or "SAM2Segment" not in extension_comfy_request("/object_info/SAM2Segment"):
+                raise RuntimeError("Person protection needs the SAM2 Mask by words engine to be running.")
+            release_engine_memory("main", "joyai", "sensenova", "ollama")
+            image_name = upload(source, EXTENSION_COMFY_URL, "mask")
+
+            def text_mask(words):
+                workflow = build_mask_from_text_workflow({"prompt": words}, image_name)
+                data = animate_comfy_output(job, extension_comfy_request, EXTENSION_COMFY_URL, workflow, ".png")
+                with Image.open(io.BytesIO(data)) as result:
+                    return result.convert("L").point(lambda value: 255 if value >= 128 else 0)
+
+            mask = text_mask("the person")
+            if mask.getextrema() != (0, 255):
+                raise RuntimeError("SAM2 could not outline the person. Choose a picture where the person is clearly visible.")
+            if request["protect_words"].casefold() != "the person":
+                job.progress = "Finding additional protected objects…"
+                mask = ImageChops.lighter(mask, text_mask(request["protect_words"]))
+        job.check_stop()
+        job.progress = "Generating motion with LTX…"
+        release_engine_memory("extension", "joyai", "sensenova", "ollama")
+        size = animate.scaled_size(source.size, 512, 32, 64)
+        image_name = upload(source.resize(size, Image.Resampling.LANCZOS), COMFY_URL, "ltx")
+        workflow = animate.build_ltx_workflow(image_name, size, request["seconds"], request["prompt"], job.id)
+        raw_video = animate_comfy_output(job, comfy_request, COMFY_URL, workflow, ".mp4")
+    job.check_stop()
+    animate.finish_life(job, ffmpeg, source, raw_video, mask)
+
+
+def upscale_animate_frames(job, ffmpeg, source):
+    with animate.gpu_slot(reserve=True):
+        if not comfy_ready():
+            raise RuntimeError("The main ComfyUI engine is offline.")
+        if engine_has_queued_work(comfy_request):
+            raise RuntimeError("The main ComfyUI engine is busy.")
+        job.progress = "Extracting MiniMax H3 frames…"
+        frames = animate.extract_real_frames(job, ffmpeg, source)
+        folder = job.folder / "upscaled-frames"
+        folder.mkdir()
+        batch_size = 8
+        for start in range(0, len(frames), batch_size):
+            batch = frames[start:start + batch_size]
+            job.progress = f"Upscaling 2× with RealESRGAN… {start}/{len(frames)} frames"
+            workflow = {"model": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": animate.REAL_UPSCALE_MODEL}}}
+            image = None
+            for frame in batch:
+                job.check_stop()
+                name = upload_camera_view_image(frame.read_bytes(), f"{job.id}-{frame.name}", folder="FrojaAnimate")
+                node = f"load-{frame.stem}"
+                workflow[node] = {"class_type": "LoadImage", "inputs": {"image": name}}
+                if image is None:
+                    image = [node, 0]
+                else:
+                    combined = f"batch-{frame.stem}"
+                    workflow[combined] = {"class_type": "ImageBatch", "inputs": {"image1": image, "image2": [node, 0]}}
+                    image = [combined, 0]
+            workflow["upscale"] = {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["model", 0], "image": image}}
+            workflow["save"] = {"class_type": "SaveImage", "inputs": {"images": ["upscale", 0], "filename_prefix": f"Froja/Animate/{job.id}"}}
+            results = animate_comfy_output(job, comfy_request, COMFY_URL, workflow, ".png", all_frames=True)
+            if len(results) != len(batch):
+                raise RuntimeError("RealESRGAN returned an incomplete batch of frames.")
+            for frame, result in zip(batch, results):
+                (folder / frame.name).write_bytes(result)
+    return folder / "%05d.png"
+
+
+def run_animate_real(job, ffmpeg, request):
+    job.check_stop()
+    job_id = start_minimax_job(dict(mode="image", aspect="original", source=request["source"],
+                                   seconds=request["seconds"], prompt=request["prompt"], audio=request["sound"]))["job_id"]
+    video = minimax_jobs[job_id]
+    while not video["_done"].is_set():
+        if job.cancel.is_set():
+            cancel_minimax_job(job_id)
+            video["_done"].wait()
+            job.check_stop()
+        job.progress = f"MiniMax H3 · {video['phase']} · {round(video['progress'] * 100)}%"
+        job.cancel.wait(0.5)
+    job.check_stop()
+    if video["status"] == "cancelled":
+        raise animate.Stopped()
+    if video["status"] != "complete":
+        raise RuntimeError(video.get("error") or "MiniMax H3 ended without a video.")
+    animate.finish_real(job, ffmpeg, Path(video["file"]), upscale_animate_frames)
+
+
+def animate_get(handler, path, *, head=False):
+    parts = path.removeprefix("/api/animate/").split("/")
+    job = animate.get_job(parts[0])
+    missing = {"error": "Animation output was not found."}
+    if job is None:
+        return json_response(handler, missing, 404)
+    if len(parts) == 1 and not head:
+        return json_response(handler, job.snapshot())
+    if len(parts) != 2 or job.status != "complete":
+        return json_response(handler, missing, 404)
+    if parts[1] == "blender.py" and job.mode == "camera" and not head:
+        keys = json.loads((job.folder / "camera_path.json").read_text(encoding="utf-8"))
+        data = animate.blender_script(keys).encode("utf-8")
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/x-python; charset=utf-8")
+        handler.send_header("Content-Disposition", 'attachment; filename="froja-camera.py"')
+        handler.send_header("Content-Length", str(len(data)))
+        handler.end_headers()
+        handler.wfile.write(data)
+        return
+    if parts[1] != "animation.mp4":
+        return json_response(handler, missing, 404)
+    video = job.folder / "animation.mp4"
+    with video.open("rb") as stream:
+        length = video.stat().st_size
+        start, end = 0, length - 1
+        byte_range = handler.headers.get("Range")
+        if byte_range:
+            match = re.fullmatch(r"bytes=([0-9]{0,20})-([0-9]{0,20})", byte_range)
+            if match:
+                first, last = match.groups()
+                if first:
+                    start = int(first)
+                    end = min(end, int(last)) if last else end
+                elif last:
+                    start = max(0, length - int(last))
+            if not match or not (first or last) or not 0 <= start <= end:
+                handler.send_response(416)
+                handler.send_header("Content-Range", f"bytes */{length}")
+                handler.send_header("Content-Length", "0")
+                handler.end_headers()
+                return
+        handler.send_response(206 if byte_range else 200)
+        handler.send_header("Content-Type", "video/mp4")
+        handler.send_header("Accept-Ranges", "bytes")
+        if byte_range:
+            handler.send_header("Content-Range", f"bytes {start}-{end}/{length}")
+        remaining = end - start + 1
+        handler.send_header("Content-Length", str(remaining))
+        handler.end_headers()
+        if head:
+            return
+        stream.seek(start)
+        while remaining:
+            chunk = stream.read(min(remaining, 256 * 1024))
+            if not chunk:
+                return
+            try:
+                handler.wfile.write(chunk)
+            except ConnectionError:
+                return  # A video player may close this request when it seeks or stops.
+            remaining -= len(chunk)
 
 
 # ---------------------------------------------------------------------------
@@ -1764,7 +2348,15 @@ def start_joyai() -> bool:
     return False
 
 
+_EXTENSION_COMFY_START_LOCK = threading.Lock()
+
+
 def start_extension_comfy() -> bool:
+    with _EXTENSION_COMFY_START_LOCK:
+        return _start_extension_comfy_locked()
+
+
+def _start_extension_comfy_locked() -> bool:
     global extension_comfy_process, EXTENSION_COMFY_URL
     if extension_comfy_ready():
         return True
@@ -3165,8 +3757,18 @@ class FrojaHandler(SimpleHTTPRequestHandler):
         except OSError:
             pass
 
+    def do_HEAD(self):
+        path = urllib.parse.urlparse(self.path).path
+        if path.startswith("/api/animate/") and path.endswith("/animation.mp4"):
+            return animate_get(self, path, head=True)
+        return super().do_HEAD()
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path.startswith("/api/wardrobe/"):
+            return wardrobe_get(self, parsed.path)
+        if parsed.path.startswith("/api/animate/"):
+            return animate_get(self, parsed.path)
         query = urllib.parse.parse_qs(parsed.query)
         if optional_routes(self, "GET", parsed, query):  # workflow library + Civitai link
             return
@@ -3368,7 +3970,9 @@ class FrojaHandler(SimpleHTTPRequestHandler):
                 job = minimax_jobs.get(job_id)
                 if not job:
                     return json_response(self, {"status": "error", "error": "Unknown video job."}, 404)
-                return json_response(self, {k: v for k, v in job.items() if k != "file"})
+                with minimax_lock:
+                    status = {k: v for k, v in job.items() if k != "file" and not k.startswith("_")}
+                return json_response(self, status)
             if not WANGP_ENABLED:
                 return json_response(self, {"status": "disabled", "error": "Private video integration is disabled."}, 503)
             try:
@@ -3534,6 +4138,55 @@ class FrojaHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/wardrobe":
+            try:
+                if not 0 <= int(self.headers.get("Content-Length", "0")) <= 70 * 1024 * 1024:
+                    return json_response(self, {"error": "Wardrobe request exceeds 70 MB."}, 413)
+                request = validate_wardrobe(read_json_body(self))
+            except ValueError as exc:
+                return json_response(self, {"error": str(exc)}, 400)
+            with wardrobe_lock:
+                if any(job.status == "running" for job in wardrobe_jobs.values()):
+                    return json_response(self, {"error": "A Wardrobe try-on is already running."}, 409)
+                job = WardrobeJob()
+                wardrobe_jobs[job.id] = job
+            threading.Thread(target=run_wardrobe, args=(job, request), daemon=True).start()
+            return json_response(self, {"job_id": job.id}, 202)
+        if parsed.path.startswith("/api/wardrobe/") and parsed.path.endswith("/stop"):
+            with wardrobe_lock:
+                job = wardrobe_jobs.get(parsed.path[len("/api/wardrobe/"):-len("/stop")])
+                if job and job.status == "running":
+                    job.cancel.set()
+            if job is None:
+                return json_response(self, {"error": "Wardrobe job was not found."}, 404)
+            return json_response(self, job.snapshot())
+        if parsed.path == "/api/animate":
+            try:
+                if not 0 <= int(self.headers.get("Content-Length", "0")) <= 160 * 1024 * 1024:
+                    return json_response(self, {"error": "Animation request exceeds 160 MB."}, 413)
+                request = animate.validate_request(read_json_body(self), decode_image_upload)
+                if request["mode"] == "real":
+                    status = minimax_status()
+                    if not status["enabled"]:
+                        raise ValueError("MiniMax H3 is switched off. Switch on MiniMax H3 in Animate first.")
+                    if not status["installed"]:
+                        raise ValueError("MiniMax H3 is not installed. Missing: " + ", ".join(status["missing"]))
+                    if not status["supported"]:
+                        raise ValueError(status["label"])
+                    if request["seconds"] > status["max_seconds"]:
+                        raise ValueError(f"Choose up to {status['max_seconds']} seconds on this graphics card.")
+            except (ValueError, OverflowError) as exc:
+                return json_response(self, {"error": str(exc)}, 400)
+            job = animate.start_job(OUTPUTS, request, run_animate_life, run_animate_real)
+            if job is None:
+                return json_response(self, {"error": "An animation is already running."}, 409)
+            return json_response(self, {"job_id": job.id}, 202)
+        if parsed.path.startswith("/api/animate/") and parsed.path.endswith("/stop"):
+            job = animate.get_job(parsed.path[len("/api/animate/"):-len("/stop")])
+            if job is None:
+                return json_response(self, {"error": "Animation job was not found."}, 404)
+            animate.stop_job(job)
+            return json_response(self, job.snapshot())
         if optional_routes(self, "POST", parsed, urllib.parse.parse_qs(parsed.query)):
             return
         if self.path in {"/api/workflow-builder/build", "/api/workflow-builder/run", "/api/workflow-builder/pack"}:

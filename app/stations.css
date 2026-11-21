@@ -209,3 +209,11 @@
 .recipe-switch input:checked + i::after { transform: translateX(20px); background: var(--sk-led, #2fc6ff); box-shadow: 0 0 10px var(--sk-led-glow, rgba(47,198,255,.55)); }
 @media (max-width: 1250px) { .create-recipe { grid-template-columns: 1fr; } }
 
+
+/* Materials & Appearance opened on its own (not inside the Training Studio) */
+.studio .training-modal .training-workspace.appearance-only,.training-workspace.appearance-only{display:contents !important}
+.training-workspace.appearance-only > :not(.appearance-library){display:none !important}
+.training-workspace.appearance-only .appearance-extension.appearance-library{left:50% !important;right:auto !important;transform:translateX(-50%);width:min(760px,calc(100vw - 32px)) !important}
+.training-workspace.appearance-only .appearance-library .appearance-cards{grid-template-columns:repeat(4,1fr)}
+.appearance-library>header{display:flex;align-items:center;justify-content:space-between}
+.appearance-library .appearance-close{width:34px;height:34px;border-radius:50%;padding:0;font-size:20px;line-height:1}
